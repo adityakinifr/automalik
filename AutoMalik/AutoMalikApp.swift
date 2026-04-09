@@ -8,9 +8,9 @@ struct AutoMalikApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 1180, minHeight: 860)
         }
         .windowStyle(.titleBar)
-        .defaultSize(width: 1100, height: 700)
+        .defaultSize(width: 1300, height: 900)
     }
 }

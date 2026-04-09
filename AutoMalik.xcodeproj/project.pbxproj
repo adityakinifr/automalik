@@ -9,55 +9,71 @@
 /* Begin PBXBuildFile section */
 		08B360EFCD2BF89E1BA5784B /* SystemAudioCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3798F99B2F751B1E3F9BF31 /* SystemAudioCapturer.swift */; };
 		0A485FF5B196825C9BD77E3B /* DemucsRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F740DEE83D444D4D96817923 /* DemucsRunner.swift */; };
+		153F441629825E9CF55FF9DD /* SourceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C5DBF775507B314B1AE3DB /* SourceCard.swift */; };
 		27E1E7D0703C294CF389B223 /* MusicalKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD68B7C82536614C13C8F21 /* MusicalKey.swift */; };
 		2B995C3054C15F1ED356F92A /* AutoMalikApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD684D770EF4574B638F86 /* AutoMalikApp.swift */; };
+		3392571E8B1B5603732C4370 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46EC10A829D657F5CC1A8E3E /* Theme.swift */; };
 		3BC899A7F5282CE76228DC38 /* PipelineStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 428696CFD55F0EFA98AA973B /* PipelineStage.swift */; };
 		47EAC3C0D37D53ABABC19835 /* PlaybackRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F78154D209FD60C9D7126E /* PlaybackRecorder.swift */; };
-		489A0FB3A1EA0E4A06B761AE /* AutoTuneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10FE0DF5BCFF927A246ACE4E /* AutoTuneView.swift */; };
-		4BF642E4EDDD3376B389DA86 /* MixExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EE37FD237BA5ED3CE399C7 /* MixExportView.swift */; };
 		5087D1E28CEB384FF27127CA /* AudioMixer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F7D7E9671A8711203E6258 /* AudioMixer.swift */; };
+		64191B5825C9B8FE9D1B3DEF /* AutoTuneCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3800823509042F6DE6ADA7 /* AutoTuneCard.swift */; };
 		6474A2726D7AF23CD0FE495A /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7594CE48438EA8D73B3658 /* WaveformView.swift */; };
 		7E39A54440890A1D22C752BB /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFCEE1AC41BE500ACF62C1FD /* AppState.swift */; };
 		828ECEB3BE1FC3AECF393985 /* PitchCorrector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4A5B52A50A25C9B0D7AF7D1 /* PitchCorrector.swift */; };
+		93EC9D90E2BB52882855DAE7 /* AnimatedWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A9EEE89602EA30235ED2362 /* AnimatedWaveform.swift */; };
 		9C797A1114231C1DD883B83C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 519BD6CFB36561B25F915C2D /* ContentView.swift */; };
 		A00977A8B102DEFBB1B5316A /* KeyScalePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B266B6B462F06F4ED797797 /* KeyScalePicker.swift */; };
 		AB2C565F7B3ABE1A63ABD1CB /* PitchDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BFC26D5DE2D3044033469E /* PitchDisplayView.swift */; };
-		AC050D18AF0E46B25C5A2A36 /* SeparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B95E8426B6F9093DEC4517 /* SeparationView.swift */; };
-		C1BF35CC1B96252BBCEFDB1B /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 974FDD17AC3F50BB2ABF6E63 /* RecordingView.swift */; };
-		D4BBB581F8D54C43C152AEBB /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9F7EA62A3641C9EA944467 /* CaptureView.swift */; };
+		BAE60256A92139A7D5376616 /* GlowButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5330731B722069CB196183A /* GlowButton.swift */; };
+		C5BED1FA78E7C9024F35B378 /* VocalsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7A9F3F72AAC103718FFE66 /* VocalsCard.swift */; };
+		CA846BE9A168BF9DCF5D33DF /* AnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E20EBDA8B3CB336EB2F7E9 /* AnimatedBackground.swift */; };
 		E90CDE398E1113670105ADEC /* PitchDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ECA37B90E029E74E3279DC /* PitchDetector.swift */; };
+		F569EB26C5F3EF77E34CFAAD /* PitchWheel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA64EDAB5C71471EA6D93A8 /* PitchWheel.swift */; };
 		F5797BAF8C7B4C03E99C1855 /* PhaseVocoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A9DF4E56B32BF9494E57C88 /* PhaseVocoder.swift */; };
 		FD410E0FD6D162305BE9300C /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = C03319D62F5C9771610F2B11 /* Project.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0B266B6B462F06F4ED797797 /* KeyScalePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyScalePicker.swift; sourceTree = "<group>"; };
-		10FE0DF5BCFF927A246ACE4E /* AutoTuneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoTuneView.swift; sourceTree = "<group>"; };
 		15F7D7E9671A8711203E6258 /* AudioMixer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixer.swift; sourceTree = "<group>"; };
 		188183FE71DFBF6025B375B1 /* AutoMalik.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AutoMalik.entitlements; sourceTree = "<group>"; };
+		1EA64EDAB5C71471EA6D93A8 /* PitchWheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchWheel.swift; sourceTree = "<group>"; };
 		428696CFD55F0EFA98AA973B /* PipelineStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineStage.swift; sourceTree = "<group>"; };
+		46EC10A829D657F5CC1A8E3E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		4A9DF4E56B32BF9494E57C88 /* PhaseVocoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseVocoder.swift; sourceTree = "<group>"; };
-		4B9F7EA62A3641C9EA944467 /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		4A9EEE89602EA30235ED2362 /* AnimatedWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedWaveform.swift; sourceTree = "<group>"; };
 		4CD68B7C82536614C13C8F21 /* MusicalKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicalKey.swift; sourceTree = "<group>"; };
 		519BD6CFB36561B25F915C2D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7EC2D5E7C0313EF937E600F7 /* AutoMalik.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoMalik.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		974FDD17AC3F50BB2ABF6E63 /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
+		AC3800823509042F6DE6ADA7 /* AutoTuneCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoTuneCard.swift; sourceTree = "<group>"; };
+		AE7A9F3F72AAC103718FFE66 /* VocalsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocalsCard.swift; sourceTree = "<group>"; };
 		B5AD684D770EF4574B638F86 /* AutoMalikApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMalikApp.swift; sourceTree = "<group>"; };
 		BFCEE1AC41BE500ACF62C1FD /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		C03319D62F5C9771610F2B11 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		C4E20EBDA8B3CB336EB2F7E9 /* AnimatedBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedBackground.swift; sourceTree = "<group>"; };
+		C5330731B722069CB196183A /* GlowButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlowButton.swift; sourceTree = "<group>"; };
 		C5ECA37B90E029E74E3279DC /* PitchDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchDetector.swift; sourceTree = "<group>"; };
-		C8EE37FD237BA5ED3CE399C7 /* MixExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixExportView.swift; sourceTree = "<group>"; };
 		D8F78154D209FD60C9D7126E /* PlaybackRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackRecorder.swift; sourceTree = "<group>"; };
 		D9548EEE18F39F28EFE4D59B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E3798F99B2F751B1E3F9BF31 /* SystemAudioCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapturer.swift; sourceTree = "<group>"; };
-		E3B95E8426B6F9093DEC4517 /* SeparationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeparationView.swift; sourceTree = "<group>"; };
 		E4A5B52A50A25C9B0D7AF7D1 /* PitchCorrector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchCorrector.swift; sourceTree = "<group>"; };
+		E8C5DBF775507B314B1AE3DB /* SourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCard.swift; sourceTree = "<group>"; };
 		F3BFC26D5DE2D3044033469E /* PitchDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchDisplayView.swift; sourceTree = "<group>"; };
 		F740DEE83D444D4D96817923 /* DemucsRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemucsRunner.swift; sourceTree = "<group>"; };
 		FD7594CE48438EA8D73B3658 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		01967E4290C2199D0FB4D2EE /* Cards */ = {
+			isa = PBXGroup;
+			children = (
+				AC3800823509042F6DE6ADA7 /* AutoTuneCard.swift */,
+				E8C5DBF775507B314B1AE3DB /* SourceCard.swift */,
+				AE7A9F3F72AAC103718FFE66 /* VocalsCard.swift */,
+			);
+			path = Cards;
+			sourceTree = "<group>";
+		};
 		027DA562A2E6B725F20CBCE7 /* Audio */ = {
 			isa = PBXGroup;
 			children = (
@@ -88,8 +104,12 @@
 		2A41EA68496677A58C5FD4C5 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				C4E20EBDA8B3CB336EB2F7E9 /* AnimatedBackground.swift */,
+				4A9EEE89602EA30235ED2362 /* AnimatedWaveform.swift */,
+				C5330731B722069CB196183A /* GlowButton.swift */,
 				0B266B6B462F06F4ED797797 /* KeyScalePicker.swift */,
 				F3BFC26D5DE2D3044033469E /* PitchDisplayView.swift */,
+				1EA64EDAB5C71471EA6D93A8 /* PitchWheel.swift */,
 				FD7594CE48438EA8D73B3658 /* WaveformView.swift */,
 			);
 			path = Components;
@@ -98,12 +118,9 @@
 		393029253BA524887A329665 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				10FE0DF5BCFF927A246ACE4E /* AutoTuneView.swift */,
-				4B9F7EA62A3641C9EA944467 /* CaptureView.swift */,
 				519BD6CFB36561B25F915C2D /* ContentView.swift */,
-				C8EE37FD237BA5ED3CE399C7 /* MixExportView.swift */,
-				974FDD17AC3F50BB2ABF6E63 /* RecordingView.swift */,
-				E3B95E8426B6F9093DEC4517 /* SeparationView.swift */,
+				46EC10A829D657F5CC1A8E3E /* Theme.swift */,
+				01967E4290C2199D0FB4D2EE /* Cards */,
 				2A41EA68496677A58C5FD4C5 /* Components */,
 			);
 			path = Views;
@@ -239,26 +256,29 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA846BE9A168BF9DCF5D33DF /* AnimatedBackground.swift in Sources */,
+				93EC9D90E2BB52882855DAE7 /* AnimatedWaveform.swift in Sources */,
 				7E39A54440890A1D22C752BB /* AppState.swift in Sources */,
 				5087D1E28CEB384FF27127CA /* AudioMixer.swift in Sources */,
 				2B995C3054C15F1ED356F92A /* AutoMalikApp.swift in Sources */,
-				489A0FB3A1EA0E4A06B761AE /* AutoTuneView.swift in Sources */,
-				D4BBB581F8D54C43C152AEBB /* CaptureView.swift in Sources */,
+				64191B5825C9B8FE9D1B3DEF /* AutoTuneCard.swift in Sources */,
 				9C797A1114231C1DD883B83C /* ContentView.swift in Sources */,
 				0A485FF5B196825C9BD77E3B /* DemucsRunner.swift in Sources */,
+				BAE60256A92139A7D5376616 /* GlowButton.swift in Sources */,
 				A00977A8B102DEFBB1B5316A /* KeyScalePicker.swift in Sources */,
-				4BF642E4EDDD3376B389DA86 /* MixExportView.swift in Sources */,
 				27E1E7D0703C294CF389B223 /* MusicalKey.swift in Sources */,
 				F5797BAF8C7B4C03E99C1855 /* PhaseVocoder.swift in Sources */,
 				3BC899A7F5282CE76228DC38 /* PipelineStage.swift in Sources */,
 				828ECEB3BE1FC3AECF393985 /* PitchCorrector.swift in Sources */,
 				E90CDE398E1113670105ADEC /* PitchDetector.swift in Sources */,
 				AB2C565F7B3ABE1A63ABD1CB /* PitchDisplayView.swift in Sources */,
+				F569EB26C5F3EF77E34CFAAD /* PitchWheel.swift in Sources */,
 				47EAC3C0D37D53ABABC19835 /* PlaybackRecorder.swift in Sources */,
 				FD410E0FD6D162305BE9300C /* Project.swift in Sources */,
-				C1BF35CC1B96252BBCEFDB1B /* RecordingView.swift in Sources */,
-				AC050D18AF0E46B25C5A2A36 /* SeparationView.swift in Sources */,
+				153F441629825E9CF55FF9DD /* SourceCard.swift in Sources */,
 				08B360EFCD2BF89E1BA5784B /* SystemAudioCapturer.swift in Sources */,
+				3392571E8B1B5603732C4370 /* Theme.swift in Sources */,
+				C5BED1FA78E7C9024F35B378 /* VocalsCard.swift in Sources */,
 				6474A2726D7AF23CD0FE495A /* WaveformView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
