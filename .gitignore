@@ -1,0 +1,21 @@
+## Xcode
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+build/
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+## Python/Demucs (generated at runtime)
+demucs_env/
+
+## Cache
+.fastembed_cache/
