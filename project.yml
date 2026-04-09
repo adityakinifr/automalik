@@ -27,5 +27,4 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
     entitlements:
       path: AutoMalik/Resources/AutoMalik.entitlements
-      properties:
-        com.apple.security.audio-input: true
+      properties: {}

@@ -39,6 +39,7 @@ struct AnimatedBackground: View {
                 phase = .pi * 2
             }
         }
+        .allowsHitTesting(false)
     }
 
     private func orb(color: Color, size: CGFloat) -> some View {

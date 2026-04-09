@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import UniformTypeIdentifiers
 
 struct SourceCard: View {
     @EnvironmentObject var appState: AppState
@@ -7,6 +9,16 @@ struct SourceCard: View {
     @Binding var errorMessage: String?
 
     @State private var isSeparating = false
+    @State private var isDropTargeted = false
+    @State private var urlInput = ""
+    @State private var isDownloading = false
+    @State private var fileInfo: FileInfo?
+
+    struct FileInfo {
+        let name: String
+        let duration: TimeInterval
+        let sizeBytes: Int64
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -34,6 +46,8 @@ struct SourceCard: View {
                     capturedState
                 } else if appState.isCapturing {
                     capturingState
+                } else if isDownloading {
+                    downloadingState
                 } else {
                     emptyState
                 }
@@ -52,44 +66,140 @@ struct SourceCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 380, maxHeight: .infinity)
         .glassCard()
+        .overlay(
+            // Drop target highlight
+            RoundedRectangle(cornerRadius: 20)
+                .strokeBorder(Theme.cyan, lineWidth: isDropTargeted ? 3 : 0)
+                .glow(color: Theme.cyan, radius: isDropTargeted ? 16 : 0)
+                .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
+        )
+        .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+        }
+        .onChange(of: appState.hasCapturedAudio) { newValue in
+            if newValue {
+                fileInfo = loadFileInfo(url: appState.project.capturedAudioURL)
+            } else {
+                fileInfo = nil
+            }
+        }
     }
 
     // MARK: - States
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "waveform.badge.plus")
-                .font(.system(size: 36))
-                .foregroundStyle(Theme.purple)
-                .glow(color: Theme.purple, radius: 12)
+        VStack(spacing: 12) {
+            // Drop zone
+            VStack(spacing: 6) {
+                Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "waveform.badge.plus")
+                    .font(.system(size: 32))
+                    .foregroundStyle(isDropTargeted ? Theme.cyan : Theme.purple)
+                    .glow(color: isDropTargeted ? Theme.cyan : Theme.purple, radius: 12)
+                Text(isDropTargeted ? "Drop to import" : "Drop a song here")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isDropTargeted ? Theme.cyan : Theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
 
-            Text("Drop a song or capture\nfrom system audio")
-                .font(.system(size: 13))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.textSecondary)
+            // OR divider
+            HStack(spacing: 8) {
+                Rectangle().fill(Theme.border).frame(height: 1)
+                Text("OR").font(.system(size: 9, weight: .black)).tracking(2).foregroundStyle(Theme.textTertiary)
+                Rectangle().fill(Theme.border).frame(height: 1)
+            }
 
-            VStack(spacing: 8) {
-                GlowButton("Import File", systemImage: "square.and.arrow.down.fill", gradient: Theme.coolGradient) {
-                    isImporting = true
+            // URL input
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textSecondary)
+                TextField("Paste YouTube URL...", text: $urlInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white)
+                    .onSubmit { downloadFromURL() }
+                if !urlInput.isEmpty {
+                    Button {
+                        downloadFromURL()
+                    } label: {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Theme.cyan)
+                    }
+                    .buttonStyle(.plain)
                 }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+            )
+
+            // Two action buttons side by side
+            HStack(spacing: 8) {
+                Button {
+                    isImporting = true
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 16))
+                        Text("Browse")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Theme.coolGradient.opacity(0.25))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.cyan.opacity(0.5), lineWidth: 1))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
 
                 Button {
+                    NSLog("[AutoMalik] Capture System Audio button tapped")
                     startCapture()
                 } label: {
-                    HStack(spacing: 8) {
+                    VStack(spacing: 4) {
                         Image(systemName: "record.circle")
-                        Text("Capture System Audio")
+                            .font(.system(size: 16))
+                        Text("Capture")
+                            .font(.system(size: 11, weight: .bold))
                     }
-                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 11)
-                    .background(Capsule().strokeBorder(Theme.purple, lineWidth: 1.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Theme.primaryGradient.opacity(0.25))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.purple.opacity(0.5), lineWidth: 1))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 8)
+    }
+
+    private var downloadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+                .tint(Theme.cyan)
+            Text("Downloading from URL...")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("This may take a moment")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 
     private var capturingState: some View {
@@ -117,7 +227,7 @@ struct SourceCard: View {
     }
 
     private var capturedState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Theme.lime)
@@ -125,14 +235,75 @@ struct SourceCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            Button("Play Source") {
-                nowPlayingURL = appState.project.capturedAudioURL
-                try? appState.playbackRecorder.playFile(appState.project.capturedAudioURL)
+            if let info = fileInfo {
+                VStack(spacing: 2) {
+                    Text(info.name)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        Text(formatDuration(info.duration))
+                        Text("•")
+                        Text(formatSize(info.sizeBytes))
+                    }
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .padding(.horizontal, 8)
             }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Theme.cyan)
-            .buttonStyle(.plain)
+            HStack(spacing: 14) {
+                Button {
+                    nowPlayingURL = appState.project.capturedAudioURL
+                    try? appState.playbackRecorder.playFile(appState.project.capturedAudioURL)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.circle.fill")
+                        Text("Play")
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.cyan)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    resetSource()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                        Text("Reset")
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.pink)
+                }
+                .buttonStyle(.plain)
+            }
         }
+    }
+
+    private func resetSource() {
+        appState.playbackRecorder.stop()
+        if nowPlayingURL == appState.project.capturedAudioURL ||
+            nowPlayingURL == appState.project.instrumentalURL ||
+            nowPlayingURL == appState.project.vocalsURL {
+            nowPlayingURL = nil
+        }
+
+        let fm = FileManager.default
+        for url in [
+            appState.project.capturedAudioURL,
+            appState.project.instrumentalURL,
+            appState.project.vocalsURL
+        ] {
+            if fm.fileExists(atPath: url.path) {
+                try? fm.removeItem(at: url)
+            }
+        }
+
+        appState.hasCapturedAudio = false
+        appState.hasSeparatedAudio = false
+        appState.completedStages.remove(.capture)
+        appState.completedStages.remove(.separation)
     }
 
     @ViewBuilder
@@ -216,9 +387,32 @@ struct SourceCard: View {
     // MARK: - Actions
 
     private func startCapture() {
+        NSLog("[AutoMalik] startCapture() called")
+        if appState.isCapturing {
+            NSLog("[AutoMalik] already capturing, ignoring click")
+            return
+        }
+
+        let hasPerm = SystemAudioCapturer.hasScreenRecordingPermission()
+        NSLog("[AutoMalik] CGPreflightScreenCaptureAccess() = \(hasPerm)")
+
+        if !hasPerm {
+            NSLog("[AutoMalik] No permission - calling CGRequestScreenCaptureAccess()")
+            let granted = SystemAudioCapturer.requestScreenRecordingPermission()
+            NSLog("[AutoMalik] CGRequestScreenCaptureAccess() = \(granted)")
+            if !granted {
+                NSLog("[AutoMalik] Showing permission alert")
+                showPermissionAlert()
+                return
+            }
+        }
+
+        NSLog("[AutoMalik] Permission OK, starting capture task")
         Task {
             do {
+                NSLog("[AutoMalik] Calling capturer.startCapture(to: \(appState.project.capturedAudioURL.path))")
                 try await appState.capturer.startCapture(to: appState.project.capturedAudioURL)
+                NSLog("[AutoMalik] startCapture returned successfully")
                 appState.isCapturing = true
                 appState.captureDuration = 0
                 Task {
@@ -228,9 +422,26 @@ struct SourceCard: View {
                         try? await Task.sleep(nanoseconds: 50_000_000)
                     }
                 }
+            } catch SystemAudioCapturer.CaptureError.permissionDenied {
+                NSLog("[AutoMalik] CaptureError.permissionDenied")
+                showPermissionAlert()
             } catch {
+                NSLog("[AutoMalik] startCapture error: \(error)")
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func showPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording Permission Required"
+        alert.informativeText = "AutoMalik needs Screen Recording permission to capture system audio. Click 'Open Settings' to grant it, then quit and relaunch AutoMalik."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            SystemAudioCapturer.openScreenRecordingSettings()
         }
     }
 
@@ -282,6 +493,18 @@ struct SourceCard: View {
                 try fm.copyItem(at: result.vocals, to: appState.project.vocalsURL)
                 appState.hasSeparatedAudio = true
                 appState.markStageComplete(.separation)
+
+                // Auto-detect key from the instrumental
+                let instrumentalURL = appState.project.instrumentalURL
+                let keyDetector = appState.keyDetector
+                Task.detached {
+                    if let detectedKey = keyDetector.detectKey(in: instrumentalURL) {
+                        await MainActor.run {
+                            appState.selectedKey = detectedKey
+                            NSLog("[AutoMalik] Detected key: \(detectedKey.root.displayName) \(detectedKey.scale.rawValue)")
+                        }
+                    }
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -293,5 +516,120 @@ struct SourceCard: View {
         let s = Int(duration) % 60
         let t = Int((duration.truncatingRemainder(dividingBy: 1)) * 10)
         return String(format: "%02d:%02d.%d", m, s, t)
+    }
+
+    private func formatSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useKB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    // MARK: - Drop handling
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            Task { @MainActor in
+                self.importFile(at: url)
+            }
+        }
+        return true
+    }
+
+    private func importFile(at url: URL) {
+        do {
+            let dest = appState.project.capturedAudioURL
+            let fm = FileManager.default
+            if fm.fileExists(atPath: dest.path) {
+                try fm.removeItem(at: dest)
+            }
+            // Convert non-WAV files via AVAudioFile -> AVAudioFile, or just copy WAV
+            if url.pathExtension.lowercased() == "wav" {
+                try fm.copyItem(at: url, to: dest)
+            } else {
+                try convertToWav(from: url, to: dest)
+            }
+            appState.hasCapturedAudio = true
+            appState.markStageComplete(.capture)
+            nowPlayingURL = dest
+            fileInfo = loadFileInfo(url: dest)
+            // Use original filename in display
+            if let info = fileInfo {
+                fileInfo = FileInfo(name: url.lastPathComponent, duration: info.duration, sizeBytes: info.sizeBytes)
+            }
+        } catch {
+            errorMessage = "Could not import file: \(error.localizedDescription)"
+        }
+    }
+
+    private func convertToWav(from sourceURL: URL, to destURL: URL) throws {
+        // Use AVAudioFile to convert any supported format to WAV
+        let inputFile = try AVAudioFile(forReading: sourceURL)
+        let format = inputFile.processingFormat
+
+        let outputSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+        let outputFile = try AVAudioFile(forWriting: destURL, settings: outputSettings, commonFormat: .pcmFormatFloat32, interleaved: true)
+
+        let bufferSize: AVAudioFrameCount = 8192
+        while inputFile.framePosition < inputFile.length {
+            let framesRemaining = AVAudioFrameCount(inputFile.length - inputFile.framePosition)
+            let framesToRead = min(bufferSize, framesRemaining)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: framesToRead) else { break }
+            try inputFile.read(into: buffer, frameCount: framesToRead)
+            try outputFile.write(from: buffer)
+        }
+    }
+
+    // MARK: - URL download
+
+    private func downloadFromURL() {
+        let urlString = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !urlString.isEmpty else { return }
+
+        if !appState.urlDownloader.isAvailable() {
+            errorMessage = "yt-dlp not found. Install via: brew install yt-dlp"
+            return
+        }
+
+        isDownloading = true
+        Task {
+            do {
+                try await appState.urlDownloader.download(url: urlString, to: appState.project.capturedAudioURL)
+                isDownloading = false
+                appState.hasCapturedAudio = true
+                appState.markStageComplete(.capture)
+                nowPlayingURL = appState.project.capturedAudioURL
+                fileInfo = loadFileInfo(url: appState.project.capturedAudioURL)
+                urlInput = ""
+            } catch {
+                isDownloading = false
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - File info
+
+    private func loadFileInfo(url: URL) -> FileInfo? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attrs?[.size] as? Int64) ?? 0
+
+        var duration: TimeInterval = 0
+        if let file = try? AVAudioFile(forReading: url) {
+            duration = Double(file.length) / file.processingFormat.sampleRate
+        }
+
+        return FileInfo(name: url.lastPathComponent, duration: duration, sizeBytes: size)
     }
 }

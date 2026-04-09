@@ -11,7 +11,9 @@ class PlaybackRecorder: ObservableObject {
 
     private var engine = AVAudioEngine()
     private var playerNode = AVAudioPlayerNode()
+    private var guideNode = AVAudioPlayerNode()
     private var audioFile: AVAudioFile?
+    private var guideFile: AVAudioFile?
     private var recordingFile: AVAudioFile?
     private var displayTimer: Timer?
 
@@ -19,14 +21,17 @@ class PlaybackRecorder: ObservableObject {
 
     func startPlaybackAndRecording(
         instrumentalURL: URL,
+        guideVocalURL: URL?,
         recordingURL: URL,
         instrumentalVolume: Float,
+        guideVocalVolume: Float,
         micMonitorVolume: Float
     ) throws {
         stop()
 
         engine = AVAudioEngine()
         playerNode = AVAudioPlayerNode()
+        guideNode = AVAudioPlayerNode()
 
         // Load instrumental file
         audioFile = try AVAudioFile(forReading: instrumentalURL)
@@ -35,10 +40,28 @@ class PlaybackRecorder: ObservableObject {
         let format = audioFile.processingFormat
         playbackDuration = Double(audioFile.length) / format.sampleRate
 
-        // Set up engine
+        // Set up instrumental player
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
         playerNode.volume = instrumentalVolume
+
+        // Set up guide vocal player (optional)
+        if let guideURL = guideVocalURL, guideVocalVolume > 0 {
+            do {
+                guideFile = try AVAudioFile(forReading: guideURL)
+                if let guideFile {
+                    let guideFormat = guideFile.processingFormat
+                    engine.attach(guideNode)
+                    engine.connect(guideNode, to: engine.mainMixerNode, format: guideFormat)
+                    guideNode.volume = guideVocalVolume
+                }
+            } catch {
+                NSLog("[PlaybackRecorder] couldn't load guide vocal: \(error)")
+                guideFile = nil
+            }
+        } else {
+            guideFile = nil
+        }
 
         // Set up mic recording
         let inputNode = engine.inputNode
@@ -91,7 +114,16 @@ class PlaybackRecorder: ObservableObject {
         // Start engine and schedule playback
         try engine.start()
         playerNode.scheduleFile(audioFile, at: nil)
-        playerNode.play()
+        if let guideFile {
+            guideNode.scheduleFile(guideFile, at: nil)
+        }
+
+        // Start both nodes simultaneously for sync
+        let now = AVAudioTime(hostTime: mach_absolute_time())
+        playerNode.play(at: now)
+        if guideFile != nil {
+            guideNode.play(at: now)
+        }
 
         isPlaying = true
         isRecording = true
@@ -115,15 +147,23 @@ class PlaybackRecorder: ObservableObject {
         displayTimer = nil
 
         playerNode.stop()
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        guideNode.stop()
+        if engine.isRunning {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+        }
 
         recordingFile = nil
         audioFile = nil
+        guideFile = nil
         isPlaying = false
         isRecording = false
         micLevel = 0
         playbackProgress = 0
+    }
+
+    func setGuideVolume(_ volume: Float) {
+        guideNode.volume = volume
     }
 
     // MARK: - Playback Only

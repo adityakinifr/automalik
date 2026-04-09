@@ -55,14 +55,14 @@ class DemucsRunner: ObservableObject {
             throw DemucsError.venvCreationFailed
         }
 
-        // Install demucs
+        // Install demucs + torchcodec (required by recent torchaudio for save)
         statusMessage = "Installing Demucs (this may take a few minutes)..."
         progress = 0.3
 
         let pipPath = venvPath.appendingPathComponent("bin/pip3").path
         let pipProcess = Process()
         pipProcess.executableURL = URL(fileURLWithPath: pipPath)
-        pipProcess.arguments = ["install", "demucs"]
+        pipProcess.arguments = ["install", "demucs", "torchcodec"]
         try pipProcess.run()
         pipProcess.waitUntilExit()
 

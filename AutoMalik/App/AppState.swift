@@ -26,6 +26,7 @@ class AppState: ObservableObject {
     @Published var isRecording = false
     @Published var isPlayingInstrumental = false
     @Published var instrumentalPlaybackVolume: Float = 0.7
+    @Published var guideVocalVolume: Float = 0.35
     @Published var micMonitorVolume: Float = 0.5
     @Published var micLevel: Float = 0
     @Published var hasRecording = false
@@ -50,6 +51,8 @@ class AppState: ObservableObject {
     let pitchCorrector = PitchCorrector()
     let phaseVocoder = PhaseVocoder()
     let audioMixer = AudioMixer()
+    let keyDetector = KeyDetector()
+    let urlDownloader = URLDownloader()
 
     func markStageComplete(_ stage: PipelineStage) {
         completedStages.insert(stage)
