@@ -25,6 +25,28 @@ targets:
         INFOPLIST_FILE: AutoMalik/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: AutoMalik/Resources/AutoMalik.entitlements
         ENABLE_HARDENED_RUNTIME: YES
+        DEVELOPMENT_TEAM: UVD556ZKBG
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
     entitlements:
       path: AutoMalik/Resources/AutoMalik.entitlements
-      properties: {}
+      properties:
+        com.apple.security.device.audio-input: true
+        com.apple.security.files.user-selected.read-write: true
+
+  AutoMalikTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - AutoMalikTests
+    dependencies:
+      - target: AutoMalik
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.automalik.AutoMalikTests
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AutoMalik.app/Contents/MacOS/AutoMalik"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: UVD556ZKBG

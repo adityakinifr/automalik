@@ -25,7 +25,7 @@ class AppState: ObservableObject {
     // Recording
     @Published var isRecording = false
     @Published var isPlayingInstrumental = false
-    @Published var instrumentalPlaybackVolume: Float = 0.7
+    @Published var instrumentalPlaybackVolume: Float = 1.0
     @Published var guideVocalVolume: Float = 0.35
     @Published var micMonitorVolume: Float = 0.5
     @Published var micLevel: Float = 0
@@ -33,13 +33,13 @@ class AppState: ObservableObject {
 
     // Auto-tune
     @Published var selectedKey = MusicalKey(root: .C, scale: .major)
-    @Published var autoTuneStrength: Float = 0.8
+    @Published var autoTuneStrength: Float = 0.45
     @Published var autoTuneEnabled = true
     @Published var isProcessingAutoTune = false
     @Published var hasAutoTunedRecording = false
 
     // Mix
-    @Published var instrumentalMixVolume: Float = 0.7
+    @Published var instrumentalMixVolume: Float = 1.0
     @Published var vocalMixVolume: Float = 1.0
     @Published var hasFinalMix = false
 
@@ -48,11 +48,14 @@ class AppState: ObservableObject {
     let demucsRunner = DemucsRunner()
     let playbackRecorder = PlaybackRecorder()
     let pitchDetector = PitchDetector()
-    let pitchCorrector = PitchCorrector()
-    let phaseVocoder = PhaseVocoder()
+    let offlinePitchTuner = OfflinePitchTuner()
     let audioMixer = AudioMixer()
     let keyDetector = KeyDetector()
     let urlDownloader = URLDownloader()
+    let liveAutoTuner = LiveAutoTuner()
+
+    // Live mode
+    @Published var isLiveMode = false
 
     func markStageComplete(_ stage: PipelineStage) {
         completedStages.insert(stage)

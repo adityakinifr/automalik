@@ -35,7 +35,7 @@ struct SourceCard: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                statusDot
+                StepBadge(number: 1, state: appState.sourceCardState)
             }
 
             Divider().background(Theme.border)
@@ -68,7 +68,7 @@ struct SourceCard: View {
         .glassCard()
         .overlay(
             // Drop target highlight
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Theme.cyan, lineWidth: isDropTargeted ? 3 : 0)
                 .glow(color: Theme.cyan, radius: isDropTargeted ? 16 : 0)
                 .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
@@ -153,11 +153,11 @@ struct SourceCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 8)
                             .fill(Theme.coolGradient.opacity(0.25))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.cyan.opacity(0.5), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.cyan.opacity(0.5), lineWidth: 1))
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
 
@@ -175,11 +175,11 @@ struct SourceCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 8)
                             .fill(Theme.primaryGradient.opacity(0.25))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.purple.opacity(0.5), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.coral.opacity(0.5), lineWidth: 1))
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
@@ -367,7 +367,7 @@ struct SourceCard: View {
 
     private var cardIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Theme.coolGradient)
                 .frame(width: 40, height: 40)
                 .glow(color: Theme.cyan, radius: 10)
@@ -377,14 +377,7 @@ struct SourceCard: View {
         }
     }
 
-    private var statusDot: some View {
-        Circle()
-            .fill(appState.hasSeparatedAudio ? Theme.lime : (appState.hasCapturedAudio ? Theme.cyan : Theme.textTertiary))
-            .frame(width: 8, height: 8)
-            .glow(color: appState.hasSeparatedAudio ? Theme.lime : Theme.cyan, radius: 4)
-    }
-
-    // MARK: - Actions
+// MARK: - Actions
 
     private func startCapture() {
         NSLog("[AutoMalik] startCapture() called")
@@ -393,21 +386,10 @@ struct SourceCard: View {
             return
         }
 
-        let hasPerm = SystemAudioCapturer.hasScreenRecordingPermission()
-        NSLog("[AutoMalik] CGPreflightScreenCaptureAccess() = \(hasPerm)")
-
-        if !hasPerm {
-            NSLog("[AutoMalik] No permission - calling CGRequestScreenCaptureAccess()")
-            let granted = SystemAudioCapturer.requestScreenRecordingPermission()
-            NSLog("[AutoMalik] CGRequestScreenCaptureAccess() = \(granted)")
-            if !granted {
-                NSLog("[AutoMalik] Showing permission alert")
-                showPermissionAlert()
-                return
-            }
-        }
-
-        NSLog("[AutoMalik] Permission OK, starting capture task")
+        // Don't gate on CGPreflightScreenCaptureAccess — it caches stale results
+        // for ad-hoc dev builds. Attempt the capture; SystemAudioCapturer probes
+        // SCShareableContent and throws .permissionDenied if access is missing.
+        NSLog("[AutoMalik] starting capture task")
         Task {
             do {
                 NSLog("[AutoMalik] Calling capturer.startCapture(to: \(appState.project.capturedAudioURL.path))")
@@ -434,8 +416,8 @@ struct SourceCard: View {
 
     private func showPermissionAlert() {
         let alert = NSAlert()
-        alert.messageText = "Screen Recording Permission Required"
-        alert.informativeText = "AutoMalik needs Screen Recording permission to capture system audio. Click 'Open Settings' to grant it, then quit and relaunch AutoMalik."
+        alert.messageText = "Screen & System Audio Permission Required"
+        alert.informativeText = "AutoMalik needs Screen & System Audio Recording permission to capture music from other apps. If AutoMalik is already enabled, remove it from the list, add it again, then quit and relaunch AutoMalik."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Cancel")
@@ -489,7 +471,11 @@ struct SourceCard: View {
                 if fm.fileExists(atPath: appState.project.vocalsURL.path) {
                     try fm.removeItem(at: appState.project.vocalsURL)
                 }
-                try fm.copyItem(at: result.instrumental, to: appState.project.instrumentalURL)
+                try AudioNormalizer.normalize(
+                    inputURL: result.instrumental,
+                    referenceURL: appState.project.capturedAudioURL,
+                    outputURL: appState.project.instrumentalURL
+                )
                 try fm.copyItem(at: result.vocals, to: appState.project.vocalsURL)
                 appState.hasSeparatedAudio = true
                 appState.markStageComplete(.separation)

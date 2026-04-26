@@ -16,6 +16,8 @@ class PlaybackRecorder: ObservableObject {
     private var guideFile: AVAudioFile?
     private var recordingFile: AVAudioFile?
     private var displayTimer: Timer?
+    private var onPlaybackComplete: (() -> Void)?
+    private var seekOffsetSeconds: Double = 0
 
     // MARK: - Playback + Recording
 
@@ -25,7 +27,8 @@ class PlaybackRecorder: ObservableObject {
         recordingURL: URL,
         instrumentalVolume: Float,
         guideVocalVolume: Float,
-        micMonitorVolume: Float
+        micMonitorVolume: Float,
+        onComplete: (() -> Void)? = nil
     ) throws {
         stop()
 
@@ -127,16 +130,20 @@ class PlaybackRecorder: ObservableObject {
 
         isPlaying = true
         isRecording = true
+        onPlaybackComplete = onComplete
 
         // Progress timer
+        seekOffsetSeconds = 0
         displayTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let nodeTime = self.playerNode.lastRenderTime,
                       let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) else { return }
-                let currentTime = Double(playerTime.sampleTime) / playerTime.sampleRate
+                let currentTime = self.seekOffsetSeconds + Double(playerTime.sampleTime) / playerTime.sampleRate
                 self.playbackProgress = currentTime / self.playbackDuration
                 if currentTime >= self.playbackDuration {
+                    let completion = self.onPlaybackComplete
                     self.stop()
+                    completion?()
                 }
             }
         }
@@ -156,6 +163,8 @@ class PlaybackRecorder: ObservableObject {
         recordingFile = nil
         audioFile = nil
         guideFile = nil
+        onPlaybackComplete = nil
+        seekOffsetSeconds = 0
         isPlaying = false
         isRecording = false
         micLevel = 0
@@ -164,6 +173,42 @@ class PlaybackRecorder: ObservableObject {
 
     func setGuideVolume(_ volume: Float) {
         guideNode.volume = volume
+    }
+
+    /// Seek the current playback to the given time. No-op if nothing is loaded
+    /// or while recording (seeking mid-record would corrupt the take).
+    func seek(to seconds: TimeInterval) {
+        guard let audioFile, !isRecording, playbackDuration > 0 else { return }
+
+        let format = audioFile.processingFormat
+        let totalFrames = AVAudioFramePosition(audioFile.length)
+        let target = max(0, min(totalFrames - 1, AVAudioFramePosition(seconds * format.sampleRate)))
+        let remaining = AVAudioFrameCount(totalFrames - target)
+        guard remaining > 0 else { return }
+
+        let wasPlaying = isPlaying
+        playerNode.stop()
+        guideNode.stop()
+
+        playerNode.scheduleSegment(audioFile, startingFrame: target, frameCount: remaining, at: nil)
+        if let guideFile {
+            let gFormat = guideFile.processingFormat
+            let gTotal = AVAudioFramePosition(guideFile.length)
+            let gTarget = max(0, min(gTotal - 1, AVAudioFramePosition(seconds * gFormat.sampleRate)))
+            let gRemaining = AVAudioFrameCount(gTotal - gTarget)
+            if gRemaining > 0 {
+                guideNode.scheduleSegment(guideFile, startingFrame: gTarget, frameCount: gRemaining, at: nil)
+            }
+        }
+
+        seekOffsetSeconds = seconds
+        playbackProgress = seconds / playbackDuration
+
+        if wasPlaying {
+            let now = AVAudioTime(hostTime: mach_absolute_time())
+            playerNode.play(at: now)
+            if guideFile != nil { guideNode.play(at: now) }
+        }
     }
 
     // MARK: - Playback Only
@@ -187,12 +232,13 @@ class PlaybackRecorder: ObservableObject {
         playerNode.scheduleFile(audioFile, at: nil)
         playerNode.play()
         isPlaying = true
+        seekOffsetSeconds = 0
 
         displayTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let nodeTime = self.playerNode.lastRenderTime,
                       let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) else { return }
-                let currentTime = Double(playerTime.sampleTime) / playerTime.sampleRate
+                let currentTime = self.seekOffsetSeconds + Double(playerTime.sampleTime) / playerTime.sampleRate
                 self.playbackProgress = currentTime / self.playbackDuration
                 if currentTime >= self.playbackDuration {
                     self.stop()
@@ -203,6 +249,63 @@ class PlaybackRecorder: ObservableObject {
 
     func setInstrumentalVolume(_ volume: Float) {
         playerNode.volume = volume
+    }
+
+    /// Play an instrumental track and a vocal track in sync, for previewing
+    /// the tuned (or raw) vocals blended with the backing music.
+    func playFilesTogether(
+        instrumentalURL: URL,
+        vocalURL: URL,
+        instrumentalVolume: Float = 0.7,
+        vocalVolume: Float = 1.0
+    ) throws {
+        stop()
+
+        engine = AVAudioEngine()
+        playerNode = AVAudioPlayerNode()
+        guideNode = AVAudioPlayerNode()
+
+        audioFile = try AVAudioFile(forReading: instrumentalURL)
+        guideFile = try AVAudioFile(forReading: vocalURL)
+        guard let audioFile, let guideFile else { return }
+
+        let instFormat = audioFile.processingFormat
+        let vocFormat = guideFile.processingFormat
+
+        let instSeconds = Double(audioFile.length) / instFormat.sampleRate
+        let vocSeconds = Double(guideFile.length) / vocFormat.sampleRate
+        playbackDuration = max(instSeconds, vocSeconds)
+
+        engine.attach(playerNode)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: instFormat)
+        playerNode.volume = instrumentalVolume
+
+        engine.attach(guideNode)
+        engine.connect(guideNode, to: engine.mainMixerNode, format: vocFormat)
+        guideNode.volume = vocalVolume
+
+        try engine.start()
+        playerNode.scheduleFile(audioFile, at: nil)
+        guideNode.scheduleFile(guideFile, at: nil)
+
+        let startTime = AVAudioTime(hostTime: mach_absolute_time())
+        playerNode.play(at: startTime)
+        guideNode.play(at: startTime)
+
+        isPlaying = true
+        seekOffsetSeconds = 0
+
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let nodeTime = self.playerNode.lastRenderTime,
+                      let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) else { return }
+                let currentTime = self.seekOffsetSeconds + Double(playerTime.sampleTime) / playerTime.sampleRate
+                self.playbackProgress = currentTime / self.playbackDuration
+                if currentTime >= self.playbackDuration {
+                    self.stop()
+                }
+            }
+        }
     }
 
     // MARK: - Helpers

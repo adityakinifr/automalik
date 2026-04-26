@@ -3,47 +3,60 @@ import SwiftUI
 enum Theme {
     // MARK: - Colors
 
-    static let background = Color(red: 0.04, green: 0.04, blue: 0.10)
-    static let backgroundDeep = Color(red: 0.02, green: 0.02, blue: 0.06)
-    static let surface = Color(red: 0.10, green: 0.10, blue: 0.18)
-    static let surfaceElevated = Color(red: 0.13, green: 0.13, blue: 0.22)
+    static let background = Color(red: 0.055, green: 0.058, blue: 0.062)
+    static let backgroundDeep = Color(red: 0.028, green: 0.030, blue: 0.033)
+    static let panel = Color(red: 0.075, green: 0.080, blue: 0.087)
+    static let surface = Color(red: 0.105, green: 0.112, blue: 0.122)
+    static let surfaceElevated = Color(red: 0.145, green: 0.153, blue: 0.166)
+    static let controlFill = Color.white.opacity(0.055)
     static let border = Color.white.opacity(0.08)
+    static let borderStrong = Color.white.opacity(0.16)
 
-    // Vibrant accents
-    static let purple = Color(red: 0.62, green: 0.31, blue: 0.87)   // #9D4EDD
-    static let pink = Color(red: 1.0, green: 0.0, blue: 0.43)        // #FF006E
-    static let cyan = Color(red: 0.0, green: 0.96, blue: 1.0)        // #00F5FF
-    static let lime = Color(red: 0.20, green: 1.0, blue: 0.42)       // #33FF6B
+    // Accents
+    static let teal = Color(red: 0.10, green: 0.73, blue: 0.70)
+    static let coral = Color(red: 0.96, green: 0.38, blue: 0.32)
+    static let amber = Color(red: 0.95, green: 0.69, blue: 0.25)
+    static let mint = Color(red: 0.35, green: 0.84, blue: 0.54)
+    static let purple = Color(red: 0.58, green: 0.43, blue: 0.94)
+    static let cyan = teal
+    static let pink = coral
+    static let lime = mint
 
     static let textPrimary = Color.white
-    static let textSecondary = Color.white.opacity(0.6)
-    static let textTertiary = Color.white.opacity(0.35)
+    static let textSecondary = Color.white.opacity(0.66)
+    static let textTertiary = Color.white.opacity(0.42)
 
     // MARK: - Gradients
 
     static let primaryGradient = LinearGradient(
-        colors: [purple, pink],
+        colors: [coral, amber],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let accentGradient = LinearGradient(
+        colors: [teal, mint],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let coolGradient = LinearGradient(
-        colors: [cyan, purple],
+        colors: [teal, purple],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let warmGradient = LinearGradient(
-        colors: [pink, Color.orange],
+        colors: [coral, amber],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let backgroundGradient = LinearGradient(
         colors: [
-            Color(red: 0.06, green: 0.04, blue: 0.16),
-            Color(red: 0.02, green: 0.02, blue: 0.08),
-            Color(red: 0.10, green: 0.03, blue: 0.18)
+            Color(red: 0.035, green: 0.037, blue: 0.041),
+            Color(red: 0.062, green: 0.067, blue: 0.071),
+            Color(red: 0.044, green: 0.047, blue: 0.052)
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -51,18 +64,18 @@ enum Theme {
 
     // MARK: - Shadows / Glow
 
-    static func glow(color: Color, radius: CGFloat = 20) -> some View {
+    static func glow(color: Color, radius: CGFloat = 16) -> some View {
         Circle()
             .fill(color)
             .blur(radius: radius)
-            .opacity(0.5)
+            .opacity(0.3)
     }
 }
 
 // MARK: - View Modifiers
 
 struct GlassCard: ViewModifier {
-    var cornerRadius: CGFloat = 20
+    var cornerRadius: CGFloat = 8
 
     func body(content: Content) -> some View {
         content
@@ -72,13 +85,29 @@ struct GlassCard: ViewModifier {
                         .fill(Theme.surface)
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(.ultraThinMaterial)
-                        .opacity(0.3)
+                        .opacity(0.18)
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.045), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
                 }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Theme.border, lineWidth: 1)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.16), Color.white.opacity(0.05)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
             )
+            .shadow(color: .black.opacity(0.22), radius: 18, y: 10)
     }
 }
 
@@ -88,17 +117,30 @@ struct GlowEffect: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .shadow(color: color.opacity(0.6), radius: radius, x: 0, y: 0)
-            .shadow(color: color.opacity(0.3), radius: radius * 2, x: 0, y: 0)
+            .shadow(color: color.opacity(0.24), radius: radius, x: 0, y: 0)
+            .shadow(color: color.opacity(0.08), radius: radius * 1.8, x: 0, y: 0)
+    }
+}
+
+struct PanelCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .background(Theme.surface.opacity(0.86), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
     }
 }
 
 extension View {
-    func glassCard(cornerRadius: CGFloat = 20) -> some View {
+    func glassCard(cornerRadius: CGFloat = 8) -> some View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    func glow(color: Color, radius: CGFloat = 12) -> some View {
+    func glow(color: Color, radius: CGFloat = 10) -> some View {
         modifier(GlowEffect(color: color, radius: radius))
+    }
+
+    func panelCard() -> some View {
+        modifier(PanelCard())
     }
 }

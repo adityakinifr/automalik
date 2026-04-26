@@ -19,7 +19,7 @@ struct AutoTuneCard: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                statusDot
+                StepBadge(number: 3, state: appState.autoTuneCardState)
             }
 
             Divider().background(Theme.border)
@@ -38,6 +38,7 @@ struct AutoTuneCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 380, maxHeight: .infinity)
         .glassCard()
+        .cardDimmed(appState.autoTuneCardState == .pending)
     }
 
     // MARK: - Status
@@ -68,8 +69,7 @@ struct AutoTuneCard: View {
                     .foregroundStyle(Theme.lime)
                 HStack(spacing: 14) {
                     Button {
-                        nowPlayingURL = appState.project.rawRecordingURL
-                        try? appState.playbackRecorder.playFile(appState.project.rawRecordingURL)
+                        playBlended(vocalURL: appState.project.rawRecordingURL)
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "play.circle")
@@ -81,8 +81,7 @@ struct AutoTuneCard: View {
                     .buttonStyle(.plain)
 
                     Button {
-                        nowPlayingURL = appState.project.tunedRecordingURL
-                        try? appState.playbackRecorder.playFile(appState.project.tunedRecordingURL)
+                        playBlended(vocalURL: appState.project.tunedRecordingURL)
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "play.circle.fill")
@@ -114,9 +113,23 @@ struct AutoTuneCard: View {
         }
     }
 
+    private func playBlended(vocalURL: URL) {
+        nowPlayingURL = vocalURL
+        do {
+            try appState.playbackRecorder.playFilesTogether(
+                instrumentalURL: appState.project.instrumentalURL,
+                vocalURL: vocalURL,
+                instrumentalVolume: appState.instrumentalMixVolume,
+                vocalVolume: appState.vocalMixVolume
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private var cardIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Theme.coolGradient)
                 .frame(width: 40, height: 40)
                 .glow(color: Theme.cyan, radius: 10)
@@ -126,10 +139,4 @@ struct AutoTuneCard: View {
         }
     }
 
-    private var statusDot: some View {
-        Circle()
-            .fill(appState.hasAutoTunedRecording ? Theme.lime : Theme.textTertiary)
-            .frame(width: 8, height: 8)
-            .glow(color: Theme.lime, radius: 4)
-    }
 }

@@ -23,7 +23,8 @@ struct VocalsCard: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                statusDot
+                liveToggle
+                StepBadge(number: 2, state: appState.vocalsCardState)
             }
 
             Divider().background(Theme.border)
@@ -39,10 +40,11 @@ struct VocalsCard: View {
                         .font(.system(size: 44, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                 } else {
+                    let isActive = appState.playbackRecorder.isRecording || appState.liveAutoTuner.isRunning
                     CircleGlowButton(
-                        systemImage: appState.playbackRecorder.isRecording ? "stop.fill" : "mic.fill",
-                        gradient: appState.playbackRecorder.isRecording ? Theme.warmGradient : Theme.primaryGradient,
-                        isActive: appState.playbackRecorder.isRecording
+                        systemImage: isActive ? "stop.fill" : "mic.fill",
+                        gradient: isActive ? Theme.warmGradient : Theme.primaryGradient,
+                        isActive: isActive
                     ) {
                         toggleRecording()
                     }
@@ -79,13 +81,38 @@ struct VocalsCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 380, maxHeight: .infinity)
         .glassCard()
+        .cardDimmed(appState.vocalsCardState == .pending)
     }
 
     // MARK: - Status area
 
     @ViewBuilder
     private var statusArea: some View {
-        if countdown > 0 {
+        if appState.liveAutoTuner.isRunning {
+            VStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    Circle().fill(Theme.lime).frame(width: 8, height: 8)
+                        .glow(color: Theme.lime, radius: 4)
+                    Text("LIVE AUTO-TUNE")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(2)
+                        .foregroundStyle(Theme.lime)
+                }
+                if appState.liveAutoTuner.detectedFreq > 0 {
+                    Text(MusicalKey.noteName(for: appState.liveAutoTuner.targetFreq))
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("\(Int(appState.liveAutoTuner.detectedFreq)) Hz → \(Int(appState.liveAutoTuner.targetFreq)) Hz")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                } else {
+                    Text("Sing into your mic")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        } else if countdown > 0 {
             VStack(spacing: 4) {
                 Text("GET READY")
                     .font(.system(size: 11, weight: .black))
@@ -159,7 +186,7 @@ struct VocalsCard: View {
 
     private var cardIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Theme.primaryGradient)
                 .frame(width: 40, height: 40)
                 .glow(color: Theme.pink, radius: 10)
@@ -169,14 +196,38 @@ struct VocalsCard: View {
         }
     }
 
-    private var statusDot: some View {
-        Circle()
-            .fill(appState.hasRecording ? Theme.lime : Theme.textTertiary)
-            .frame(width: 8, height: 8)
-            .glow(color: Theme.lime, radius: 4)
+    private var liveToggle: some View {
+        Button {
+            toggleLiveMode()
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(appState.isLiveMode ? Theme.lime : Theme.textTertiary)
+                    .frame(width: 6, height: 6)
+                    .glow(color: appState.isLiveMode ? Theme.lime : .clear, radius: 4)
+                Text("LIVE")
+                    .font(.system(size: 10, weight: .black))
+                    .tracking(1.5)
+                    .foregroundStyle(appState.isLiveMode ? Theme.lime : Theme.textSecondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(appState.isLiveMode ? Theme.lime.opacity(0.15) : Color.white.opacity(0.05))
+                    .overlay(
+                        Capsule().strokeBorder(
+                            appState.isLiveMode ? Theme.lime : Theme.border,
+                            lineWidth: 1
+                        )
+                    )
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
-    private func volumeSlider(_ label: String, value: Binding<Float>, icon: String, color: Color) -> some View {
+private func volumeSlider(_ label: String, value: Binding<Float>, icon: String, color: Color) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -199,6 +250,24 @@ struct VocalsCard: View {
     // MARK: - Actions
 
     private func toggleRecording() {
+        // LIVE MODE: real-time auto-tune monitoring
+        if appState.isLiveMode {
+            if appState.liveAutoTuner.isRunning {
+                appState.liveAutoTuner.stop()
+                if FileManager.default.fileExists(atPath: appState.project.tunedRecordingURL.path) {
+                    appState.hasRecording = true
+                    appState.hasAutoTunedRecording = true
+                    appState.markStageComplete(.recording)
+                    appState.markStageComplete(.autoTune)
+                }
+                return
+            }
+
+            requestMicAccess { startLiveMode() }
+            return
+        }
+
+        // OFFLINE MODE: record then process
         if appState.playbackRecorder.isRecording {
             appState.playbackRecorder.stop()
             appState.hasRecording = true
@@ -212,7 +281,45 @@ struct VocalsCard: View {
             return
         }
 
-        // Start a 3-second countdown before recording begins
+        requestMicAccess { startCountdown() }
+    }
+
+    private func startLiveMode() {
+        // Pick the best available instrumental:
+        //   1. Demucs-separated instrumental (highest quality)
+        //   2. Quick center-cancellation from captured audio (instant)
+        //   3. None - just sing without backing
+        var instrumentalURL: URL? = nil
+        if appState.hasSeparatedAudio {
+            instrumentalURL = appState.project.instrumentalURL
+        } else if appState.hasCapturedAudio {
+            let instantURL = appState.project.directory.appendingPathComponent("instant_instrumental.wav")
+            do {
+                instrumentalURL = try InstantVocalRemover.removeVocals(
+                    from: appState.project.capturedAudioURL,
+                    to: instantURL
+                )
+                NSLog("[AutoMalik] Generated instant instrumental via center cancellation")
+            } catch {
+                NSLog("[AutoMalik] Instant vocal removal failed: \(error)")
+                instrumentalURL = appState.project.capturedAudioURL
+            }
+        }
+
+        do {
+            appState.liveAutoTuner.setKey(appState.selectedKey)
+            appState.liveAutoTuner.setStrength(appState.autoTuneStrength)
+            try appState.liveAutoTuner.start(
+                instrumentalURL: instrumentalURL,
+                recordingURL: appState.project.tunedRecordingURL,
+                instrumentalVolume: appState.instrumentalPlaybackVolume
+            )
+        } catch {
+            errorMessage = "Live mode failed to start: \(error.localizedDescription)"
+        }
+    }
+
+    private func startCountdown() {
         countdown = 3
         countdownTimer?.invalidate()
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -227,6 +334,40 @@ struct VocalsCard: View {
         }
     }
 
+    // Ensures macOS mic permission is granted before starting the engine.
+    // Without this, the first tap shows the permission prompt mid-recording
+    // and the input tap silently drops buffers until the user retries.
+    private func requestMicAccess(_ onGranted: @escaping () -> Void) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            onGranted()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                Task { @MainActor in
+                    if granted {
+                        onGranted()
+                    } else {
+                        errorMessage = "AutoMalik needs microphone access to record your voice."
+                    }
+                }
+            }
+        case .denied, .restricted:
+            errorMessage = "Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone."
+        @unknown default:
+            errorMessage = "Microphone access unavailable."
+        }
+    }
+
+    private func toggleLiveMode() {
+        if appState.liveAutoTuner.isRunning {
+            appState.liveAutoTuner.stop()
+        }
+        if appState.playbackRecorder.isRecording {
+            appState.playbackRecorder.stop()
+        }
+        appState.isLiveMode.toggle()
+    }
+
     private func beginRecording() {
         do {
             try appState.playbackRecorder.startPlaybackAndRecording(
@@ -235,7 +376,14 @@ struct VocalsCard: View {
                 recordingURL: appState.project.rawRecordingURL,
                 instrumentalVolume: appState.instrumentalPlaybackVolume,
                 guideVocalVolume: appState.guideVocalVolume,
-                micMonitorVolume: appState.micMonitorVolume
+                micMonitorVolume: appState.micMonitorVolume,
+                onComplete: {
+                    Task { @MainActor in
+                        appState.hasRecording = true
+                        appState.markStageComplete(.recording)
+                        runAutoTune()
+                    }
+                }
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -250,52 +398,22 @@ struct VocalsCard: View {
 
     private func runAutoTune() {
         let inputURL = appState.project.rawRecordingURL
+        let outputURL = appState.project.tunedRecordingURL
+        let key = appState.selectedKey
+        let strength = appState.autoTuneStrength
+        let tuner = appState.offlinePitchTuner
+        let detector = appState.pitchDetector
         appState.isProcessingAutoTune = true
 
         Task.detached {
             do {
-                let audioFile = try AVAudioFile(forReading: inputURL)
-                let format = audioFile.processingFormat
-                let frameCount = AVAudioFrameCount(audioFile.length)
-                guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-                    throw NSError(domain: "AutoTune", code: 1)
-                }
-                try audioFile.read(into: buffer)
-                guard let channelData = buffer.floatChannelData else {
-                    throw NSError(domain: "AutoTune", code: 2)
-                }
-                let samples = Array(UnsafeBufferPointer(start: channelData[0], count: Int(buffer.frameLength)))
-
-                let key = await MainActor.run { self.appState.selectedKey }
-                let strength = await MainActor.run { self.appState.autoTuneStrength }
-                let pd = await MainActor.run { self.appState.pitchDetector }
-                let pc = await MainActor.run { self.appState.pitchCorrector }
-                let pv = await MainActor.run { self.appState.phaseVocoder }
-
-                let processed = pc.autoTune(
-                    samples: samples,
-                    sampleRate: Float(format.sampleRate),
+                try tuner.tune(
+                    inputURL: inputURL,
+                    outputURL: outputURL,
                     key: key,
                     strength: strength,
-                    pitchDetector: pd,
-                    phaseVocoder: pv
+                    pitchDetector: detector
                 )
-
-                let outputURL = await MainActor.run { self.appState.project.tunedRecordingURL }
-                let outputFile = try AVAudioFile(
-                    forWriting: outputURL,
-                    settings: format.settings,
-                    commonFormat: format.commonFormat,
-                    interleaved: format.isInterleaved
-                )
-                guard let outBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(processed.count)) else {
-                    throw NSError(domain: "AutoTune", code: 3)
-                }
-                outBuffer.frameLength = AVAudioFrameCount(processed.count)
-                let ptr = outBuffer.floatChannelData![0]
-                for i in 0..<processed.count { ptr[i] = processed[i] }
-                try outputFile.write(from: outBuffer)
-
                 await MainActor.run {
                     self.appState.isProcessingAutoTune = false
                     self.appState.hasAutoTunedRecording = true

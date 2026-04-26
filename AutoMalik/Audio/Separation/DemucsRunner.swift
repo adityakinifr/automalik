@@ -7,6 +7,8 @@ class DemucsRunner: ObservableObject {
     @Published var statusMessage = ""
     @Published var isSetUp = false
 
+    private let modelName = "htdemucs_ft"
+
     private let appSupportDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AutoMalik", isDirectory: true)
@@ -94,7 +96,8 @@ class DemucsRunner: ObservableObject {
         process.arguments = [
             "-m", "demucs",
             "--two-stems", "vocals",
-            "-n", "htdemucs",
+            "-n", modelName,
+            "--shifts", "2",
             "--out", outputDir.path,
             inputFile.path
         ]
@@ -119,10 +122,10 @@ class DemucsRunner: ObservableObject {
             throw DemucsError.separationFailed
         }
 
-        // Find output files - demucs outputs to outputDir/htdemucs/<filename>/
+        // Find output files - demucs outputs to outputDir/<model>/<filename>/
         let inputName = inputFile.deletingPathExtension().lastPathComponent
         let demucsOutputDir = outputDir
-            .appendingPathComponent("htdemucs")
+            .appendingPathComponent(modelName)
             .appendingPathComponent(inputName)
 
         let instrumentalFile = demucsOutputDir.appendingPathComponent("no_vocals.wav")

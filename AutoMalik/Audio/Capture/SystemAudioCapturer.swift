@@ -2,7 +2,6 @@ import Foundation
 import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
-import CoreGraphics
 import AppKit
 
 @MainActor
@@ -23,12 +22,14 @@ class SystemAudioCapturer: NSObject, ObservableObject {
 
     // MARK: - Permission helpers
 
-    static func hasScreenRecordingPermission() -> Bool {
-        return CGPreflightScreenCaptureAccess()
-    }
-
-    static func requestScreenRecordingPermission() -> Bool {
-        return CGRequestScreenCaptureAccess()
+    static func probeScreenRecordingPermission() async -> Bool {
+        do {
+            _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            return true
+        } catch {
+            NSLog("[Capturer] screen recording permission probe failed: \(error)")
+            return false
+        }
     }
 
     static func openScreenRecordingSettings() {
@@ -43,15 +44,8 @@ class SystemAudioCapturer: NSObject, ObservableObject {
         NSLog("[Capturer] startCapture entered")
         outputURL = url
 
-        if !CGPreflightScreenCaptureAccess() {
-            let granted = CGRequestScreenCaptureAccess()
-            if !granted {
-                throw CaptureError.permissionDenied
-            }
-        }
-        NSLog("[Capturer] permission OK")
-
-        // Get shareable content
+        // CGPreflightScreenCaptureAccess caches per-process and is unreliable
+        // for ad-hoc dev builds; use SCShareableContent as the real permission test.
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
@@ -211,7 +205,7 @@ class SystemAudioCapturer: NSObject, ObservableObject {
             case .noDisplay: return "No display found for audio capture."
             case .noOutput: return "No output file was created."
             case .permissionDenied:
-                return "Screen Recording permission is required to capture system audio. Open System Settings → Privacy & Security → Screen Recording, enable AutoMalik, then quit and relaunch the app."
+                return "Screen & System Audio Recording permission is required to capture system audio. Open System Settings → Privacy & Security → Screen & System Audio Recording, enable AutoMalik, then quit and relaunch the app."
             }
         }
     }

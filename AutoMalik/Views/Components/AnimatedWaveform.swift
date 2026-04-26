@@ -7,9 +7,11 @@ struct AnimatedWaveform: View {
     var isPlaying: Bool = false
     var progress: Double = 0
     var color: Color = Theme.cyan
+    var onSeek: ((Double) -> Void)? = nil
 
     @State private var samples: [Float] = []
     @State private var animationPhase: CGFloat = 0
+    @State private var hoverProgress: Double? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -107,13 +109,41 @@ struct AnimatedWaveform: View {
                 ))
             }
 
+            // Hover preview line
+            if let hover = hoverProgress, onSeek != nil {
+                Rectangle()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 1, height: size.height)
+                    .offset(x: hover * size.width)
+            }
+
             // Playhead
             if isPlaying || progress > 0 {
                 Rectangle()
                     .fill(Color.white)
                     .frame(width: 2, height: size.height)
-                    .glow(color: Theme.cyan, radius: 8)
+                    .glow(color: Theme.cyan, radius: 4)
                     .offset(x: progressX)
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let p = max(0, min(1, value.location.x / size.width))
+                    hoverProgress = p
+                    onSeek?(p)
+                }
+                .onEnded { _ in
+                    hoverProgress = nil
+                }
+        )
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let pt):
+                hoverProgress = max(0, min(1, pt.x / size.width))
+            case .ended:
+                hoverProgress = nil
             }
         }
     }

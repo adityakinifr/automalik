@@ -38,16 +38,17 @@ struct GlowButton: View {
                     .font(.system(size: 16, weight: .bold))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
             .background(
-                Capsule().fill(gradient)
+                RoundedRectangle(cornerRadius: 8).fill(gradient)
             )
             .overlay(
-                Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
             )
-            .shadow(color: Theme.purple.opacity(isHovering ? 0.8 : 0.5), radius: isHovering ? 24 : 16, x: 0, y: 4)
-            .scaleEffect(isHovering ? 1.04 : 1.0)
+            .shadow(color: Theme.teal.opacity(isHovering ? 0.26 : 0.16), radius: isHovering ? 18 : 12, x: 0, y: 6)
+            .scaleEffect(isHovering ? 1.015 : 1.0)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -93,9 +94,9 @@ struct CircleGlowButton: View {
                     .fill(gradient)
                     .frame(width: 88, height: 88)
                     .overlay(
-                        Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 2)
+                        Circle().strokeBorder(Color.white.opacity(0.24), lineWidth: 2)
                     )
-                    .shadow(color: Theme.pink.opacity(0.7), radius: 30, x: 0, y: 0)
+                    .shadow(color: Theme.coral.opacity(0.30), radius: 24, x: 0, y: 8)
 
                 Image(systemName: systemImage)
                     .font(.system(size: 32, weight: .bold))

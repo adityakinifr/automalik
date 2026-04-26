@@ -62,23 +62,31 @@ struct MusicalKey: Equatable {
         guard freq > 0 else { return freq }
 
         let midiNote = 69.0 + 12.0 * log2(Double(freq) / 440.0)
-        let semitone = Int(round(midiNote)) % 12
-        let normalizedSemitone = semitone < 0 ? semitone + 12 : semitone
-        let octaveBase = Int(round(midiNote)) - normalizedSemitone
+        let targetMidi = nearestValidMidi(to: midiNote)
+        return Float(440.0 * pow(2.0, (targetMidi - 69.0) / 12.0))
+    }
 
-        // Find nearest valid semitone
-        var bestDistance = Int.max
-        var bestSemitone = normalizedSemitone
-        for valid in validSemitones {
-            let dist = min(abs(valid - normalizedSemitone), 12 - abs(valid - normalizedSemitone))
-            if dist < bestDistance {
-                bestDistance = dist
-                bestSemitone = valid
+    /// Given a MIDI pitch, returns the nearest MIDI note in this key.
+    func nearestValidMidi(to midiNote: Double) -> Double {
+        let rounded = Int(round(midiNote))
+        let baseOctave = rounded - (((rounded % 12) + 12) % 12)
+
+        var bestMidi = Double(rounded)
+        var bestDistance = Double.greatestFiniteMagnitude
+
+        // Include adjacent octaves so notes near B/C boundaries snap to the
+        // closest pitch, not to the same pitch class in the wrong octave.
+        for octaveOffset in stride(from: -12, through: 12, by: 12) {
+            for semitone in validSemitones {
+                let candidate = Double(baseOctave + octaveOffset + semitone)
+                let distance = abs(candidate - midiNote)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestMidi = candidate
+                }
             }
         }
-
-        let targetMidi = Double(octaveBase + bestSemitone)
-        return Float(440.0 * pow(2.0, (targetMidi - 69.0) / 12.0))
+        return bestMidi
     }
 
     /// Returns the note name for a given frequency
