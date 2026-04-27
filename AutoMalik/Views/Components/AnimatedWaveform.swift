@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AppKit
 
 struct AnimatedWaveform: View {
     let audioURL: URL?
@@ -12,6 +13,7 @@ struct AnimatedWaveform: View {
     @State private var samples: [Float] = []
     @State private var animationPhase: CGFloat = 0
     @State private var hoverProgress: Double? = nil
+    @State private var isHovering = false
 
     var body: some View {
         GeometryReader { geo in
@@ -71,62 +73,87 @@ struct AnimatedWaveform: View {
     // MARK: - Waveform with progress
 
     private func waveformView(in size: CGSize) -> some View {
-        let midY = size.height / 2
-        let stepWidth = size.width / CGFloat(samples.count)
-        let progressX = size.width * CGFloat(progress)
+        let waveformHeight = max(24, size.height - 20)
+        let clampedProgress = max(0, min(1, progress.isFinite ? progress : 0))
+        let progressX = size.width * CGFloat(clampedProgress)
+        let hoverX = size.width * CGFloat(hoverProgress ?? clampedProgress)
 
         return ZStack(alignment: .leading) {
-            // Background waveform (unplayed)
-            Canvas { context, _ in
-                var path = Path()
-                for (index, sample) in samples.enumerated() {
-                    let x = CGFloat(index) * stepWidth
-                    let amp = max(2, CGFloat(sample) * midY * 1.8)
-                    path.addRoundedRect(
-                        in: CGRect(x: x, y: midY - amp/2, width: max(1, stepWidth - 1), height: amp),
-                        cornerSize: CGSize(width: 1, height: 1)
-                    )
-                }
-                context.fill(path, with: .color(Theme.textTertiary))
-            }
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovering ? Theme.controlFill.opacity(0.95) : Theme.surface.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isHovering ? Theme.cyan.opacity(0.7) : Theme.border, lineWidth: isHovering ? 1.5 : 1)
+                )
 
-            // Played portion (gradient)
-            Canvas { context, _ in
-                var path = Path()
-                for (index, sample) in samples.enumerated() {
-                    let x = CGFloat(index) * stepWidth
-                    if x > progressX { break }
-                    let amp = max(2, CGFloat(sample) * midY * 1.8)
-                    path.addRoundedRect(
-                        in: CGRect(x: x, y: midY - amp/2, width: max(1, stepWidth - 1), height: amp),
-                        cornerSize: CGSize(width: 1, height: 1)
-                    )
-                }
-                context.fill(path, with: .linearGradient(
+            waveformCanvas(in: CGSize(width: size.width, height: waveformHeight), fill: .color(Theme.textTertiary.opacity(0.55)))
+                .frame(height: waveformHeight)
+                .padding(.top, 2)
+
+            waveformCanvas(
+                in: CGSize(width: size.width, height: waveformHeight),
+                fill: .linearGradient(
                     Gradient(colors: [Theme.cyan, Theme.purple, Theme.pink]),
                     startPoint: .zero,
                     endPoint: CGPoint(x: size.width, y: 0)
-                ))
+                )
+            )
+            .frame(height: waveformHeight)
+            .padding(.top, 2)
+            .mask(alignment: .leading) {
+                Rectangle()
+                    .frame(width: max(0, progressX))
             }
 
             // Hover preview line
             if let hover = hoverProgress, onSeek != nil {
                 Rectangle()
-                    .fill(Color.white.opacity(0.35))
-                    .frame(width: 1, height: size.height)
+                    .fill(Theme.mint.opacity(0.55))
+                    .frame(width: 1.5, height: size.height - 12)
                     .offset(x: hover * size.width)
+                    .padding(.vertical, 6)
             }
 
             // Playhead
-            if isPlaying || progress > 0 {
-                Rectangle()
-                    .fill(Color.white)
-                    .frame(width: 2, height: size.height)
-                    .glow(color: Theme.cyan, radius: 4)
-                    .offset(x: progressX)
+            if isPlaying || clampedProgress > 0 {
+                ZStack {
+                    Rectangle()
+                        .fill(Color.white)
+                        .frame(width: 2, height: size.height - 12)
+                        .glow(color: Theme.cyan, radius: 5)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 14, height: 14)
+                        .overlay(Circle().strokeBorder(Theme.cyan, lineWidth: 2))
+                        .shadow(color: Theme.cyan.opacity(0.35), radius: 8, y: 2)
+                        .offset(y: -(size.height / 2) + 11)
+                }
+                .offset(x: progressX)
+            }
+
+            VStack {
+                Spacer()
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.textTertiary.opacity(0.28))
+                        .frame(height: 5)
+                    Capsule()
+                        .fill(Theme.accentGradient)
+                        .frame(width: max(0, progressX), height: 5)
+                    if isHovering, onSeek != nil {
+                        Circle()
+                            .fill(Theme.mint)
+                            .frame(width: 9, height: 9)
+                            .offset(x: hoverX - 4.5)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.bottom, 2)
             }
         }
         .contentShape(Rectangle())
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .animation(.linear(duration: isPlaying ? 0.05 : 0.12), value: clampedProgress)
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
@@ -145,6 +172,37 @@ struct AnimatedWaveform: View {
             case .ended:
                 hoverProgress = nil
             }
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering, onSeek != nil {
+                NSCursor.pointingHand.push()
+            } else if onSeek != nil {
+                NSCursor.pop()
+            }
+        }
+    }
+
+    private func waveformCanvas(in size: CGSize, fill: GraphicsContext.Shading) -> some View {
+        let midY = size.height / 2
+        let stepWidth = size.width / CGFloat(samples.count)
+
+        return Canvas { context, _ in
+            var path = Path()
+            for (index, sample) in samples.enumerated() {
+                let x = CGFloat(index) * stepWidth
+                let amp = max(3, CGFloat(sample) * midY * 1.85)
+                path.addRoundedRect(
+                    in: CGRect(
+                        x: x,
+                        y: midY - amp / 2,
+                        width: max(1.5, stepWidth - 1),
+                        height: amp
+                    ),
+                    cornerSize: CGSize(width: 1.5, height: 1.5)
+                )
+            }
+            context.fill(path, with: fill)
         }
     }
 

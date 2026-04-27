@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
+import AppKit
 
 struct SourceCard: View {
     @EnvironmentObject var appState: AppState
@@ -41,7 +42,7 @@ struct SourceCard: View {
             Divider().background(Theme.border)
 
             // Body content
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 if appState.hasCapturedAudio {
                     capturedState
                 } else if appState.isCapturing {
@@ -61,10 +62,9 @@ struct SourceCard: View {
                 }
             }
 
-            Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 380, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .glassCard()
         .overlay(
             // Drop target highlight
@@ -81,6 +81,11 @@ struct SourceCard: View {
                 fileInfo = loadFileInfo(url: appState.project.capturedAudioURL)
             } else {
                 fileInfo = nil
+            }
+        }
+        .onAppear {
+            if appState.hasCapturedAudio {
+                fileInfo = loadFileInfo(url: appState.project.capturedAudioURL)
             }
         }
     }
@@ -183,6 +188,26 @@ struct SourceCard: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            Button {
+                loadStepOneSnapshot()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "tray.and.arrow.down.fill")
+                    Text("Load Saved Step 1")
+                }
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.mint)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Theme.mint.opacity(0.12))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.mint.opacity(0.35), lineWidth: 1))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -227,58 +252,79 @@ struct SourceCard: View {
     }
 
     private var capturedState: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Theme.lime)
-                Text("Source loaded")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            if let info = fileInfo {
-                VStack(spacing: 2) {
-                    Text(info.name)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    HStack(spacing: 6) {
-                        Text(formatDuration(info.duration))
-                        Text("•")
-                        Text(formatSize(info.sizeBytes))
-                    }
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Theme.mint.opacity(0.16))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: appState.hasSeparatedAudio ? "checkmark.seal.fill" : "music.note")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Theme.mint)
                 }
-                .padding(.horizontal, 8)
-            }
-            HStack(spacing: 14) {
-                Button {
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(appState.hasSeparatedAudio ? "Source ready" : "Source loaded")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    if let info = fileInfo {
+                        Text(info.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        HStack(spacing: 6) {
+                            Label(formatDuration(info.duration), systemImage: "clock")
+                            Text("•")
+                            Text(formatSize(info.sizeBytes))
+                        }
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                    } else {
+                        Text("Captured audio is available")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                sourceIconButton(
+                    systemImage: "play.fill",
+                    tint: Theme.cyan,
+                    help: "Play source"
+                ) {
                     nowPlayingURL = appState.project.capturedAudioURL
                     try? appState.playbackRecorder.playFile(appState.project.capturedAudioURL)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.circle.fill")
-                        Text("Play")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.cyan)
                 }
-                .buttonStyle(.plain)
 
-                Button {
+                sourceIconButton(
+                    systemImage: "arrow.counterclockwise",
+                    tint: Theme.pink,
+                    help: "Reset source"
+                ) {
                     resetSource()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
-                        Text("Reset")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.pink)
                 }
-                .buttonStyle(.plain)
+            }
+
+            if appState.hasSeparatedAudio {
+                Text("Instrumental and vocal stems are isolated. Preview either stem or save this Step 1 package for later.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(2)
             }
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Theme.controlFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(appState.hasSeparatedAudio ? Theme.mint.opacity(0.28) : Theme.border, lineWidth: 1)
+        )
     }
 
     private func resetSource() {
@@ -293,7 +339,8 @@ struct SourceCard: View {
         for url in [
             appState.project.capturedAudioURL,
             appState.project.instrumentalURL,
-            appState.project.vocalsURL
+            appState.project.vocalsURL,
+            appState.project.stepOneManifestURL
         ] {
             if fm.fileExists(atPath: url.path) {
                 try? fm.removeItem(at: url)
@@ -329,38 +376,122 @@ struct SourceCard: View {
     }
 
     private var separationResults: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Theme.lime)
-                Text("Separated")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-            }
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                stemPill("Instrumental", url: appState.project.instrumentalURL, color: Theme.cyan)
-                stemPill("Vocals", url: appState.project.vocalsURL, color: Theme.pink)
+                Text("Stems")
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.textTertiary)
+                Rectangle()
+                    .fill(Theme.border)
+                    .frame(height: 1)
+            }
+
+            HStack(spacing: 10) {
+                stemButton(
+                    "Instrumental",
+                    subtitle: "Backing track",
+                    systemImage: "speaker.wave.2.fill",
+                    url: appState.project.instrumentalURL,
+                    color: Theme.cyan
+                )
+                stemButton(
+                    "Vocals",
+                    subtitle: "Isolated voice",
+                    systemImage: "waveform",
+                    url: appState.project.vocalsURL,
+                    color: Theme.pink
+                )
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    saveStepOneSnapshot()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.arrow.down")
+                        Text("Save Step 1")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.82))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Save the captured source and isolated stems")
+
+                Button {
+                    loadStepOneSnapshot()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                        Text("Load")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.controlFill, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.borderStrong, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Load a saved Step 1 package")
             }
         }
-        .padding(.top, 4)
     }
 
-    private func stemPill(_ label: String, url: URL, color: Color) -> some View {
+    private func stemButton(_ label: String, subtitle: String, systemImage: String, url: URL, color: Color) -> some View {
         Button {
             nowPlayingURL = url
             try? appState.playbackRecorder.playFile(url)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "play.fill").font(.system(size: 9))
-                Text(label).font(.system(size: 11, weight: .bold))
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.2))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(color)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "play.fill")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(color)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(color.opacity(0.2)))
-            .overlay(Capsule().strokeBorder(color, lineWidth: 1))
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(Theme.controlFill, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(color.opacity(0.45), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .help("Play \(label.lowercased())")
+    }
+
+    private func sourceIconButton(systemImage: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(tint)
+                .frame(width: 34, height: 34)
+                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tint.opacity(0.45), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     // MARK: - Header bits
@@ -477,6 +608,7 @@ struct SourceCard: View {
                     outputURL: appState.project.instrumentalURL
                 )
                 try fm.copyItem(at: result.vocals, to: appState.project.vocalsURL)
+                try appState.project.writeStepOneManifest(sourceName: fileInfo?.name)
                 appState.hasSeparatedAudio = true
                 appState.markStageComplete(.separation)
 
@@ -494,6 +626,45 @@ struct SourceCard: View {
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func saveStepOneSnapshot() {
+        guard appState.hasSeparatedAudio else { return }
+
+        let panel = NSSavePanel()
+        panel.title = "Save Step 1"
+        panel.prompt = "Save"
+        panel.nameFieldStringValue = "AutoMalik Step 1"
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try appState.saveStepOneSnapshot(to: url, sourceName: fileInfo?.name)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func loadStepOneSnapshot() {
+        let panel = NSOpenPanel()
+        panel.title = "Load Saved Step 1"
+        panel.prompt = "Load"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try appState.loadStepOneSnapshot(from: url)
+            fileInfo = loadFileInfo(url: appState.project.capturedAudioURL)
+            nowPlayingURL = appState.project.instrumentalURL
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

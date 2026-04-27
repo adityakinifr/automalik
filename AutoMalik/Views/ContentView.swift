@@ -253,16 +253,30 @@ struct ContentView: View {
                 Spacer()
 
                 if nowPlayingURL != nil {
-                    Button { togglePlay() } label: {
-                        Image(systemName: appState.playbackRecorder.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 19, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 54, height: 54)
-                            .background(Theme.accentGradient, in: Circle())
-                            .shadow(color: Theme.teal.opacity(0.28), radius: 18, y: 8)
+                    HStack(spacing: 10) {
+                        transportIconButton("gobackward.10", size: 44) {
+                            appState.playbackRecorder.skip(by: -10)
+                        }
+                        .help("Back 10 seconds")
+                        .disabled(!canSeekPlayback)
+
+                        Button { togglePlay() } label: {
+                            Image(systemName: appState.playbackRecorder.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 19, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 54, height: 54)
+                                .background(Theme.accentGradient, in: Circle())
+                                .shadow(color: Theme.teal.opacity(0.28), radius: 18, y: 8)
+                        }
+                        .buttonStyle(.plain)
+                        .help(appState.playbackRecorder.isPlaying ? "Pause" : "Play")
+
+                        transportIconButton("goforward.10", size: 44) {
+                            appState.playbackRecorder.skip(by: 10)
+                        }
+                        .help("Forward 10 seconds")
+                        .disabled(!canSeekPlayback)
                     }
-                    .buttonStyle(.plain)
-                    .help(appState.playbackRecorder.isPlaying ? "Pause" : "Play")
                 }
             }
 
@@ -288,6 +302,7 @@ struct ContentView: View {
 
             HStack(spacing: 10) {
                 transportStat("Mode", value: appState.isLiveMode ? "Live" : "Offline", tint: appState.isLiveMode ? Theme.mint : Theme.amber)
+                transportStat("Position", value: playbackPositionLabel, tint: Theme.cyan)
                 transportStat("Capture", value: appState.isCapturing ? formatDuration(appState.captureDuration) : (appState.hasCapturedAudio ? "Loaded" : "Idle"), tint: appState.isCapturing ? Theme.coral : Theme.teal)
                 transportStat("Tuning", value: appState.hasAutoTunedRecording ? "Printed" : (appState.isProcessingAutoTune ? "Running" : "\(Int(appState.autoTuneStrength * 100))%"), tint: Theme.purple)
                 Spacer()
@@ -307,8 +322,20 @@ struct ContentView: View {
     private var nowPlayingSubtitle: String {
         if appState.isCapturing { return "LIVE INPUT" }
         if appState.playbackRecorder.isRecording { return "MIC SIGNAL" }
-        if nowPlayingURL != nil { return "READY TO PLAY" }
+        if nowPlayingURL != nil {
+            return appState.playbackRecorder.isPlaying ? "PLAYING" : "READY TO PLAY"
+        }
         return "DROP A FILE OR CAPTURE FROM SYSTEM"
+    }
+
+    private var canSeekPlayback: Bool {
+        nowPlayingURL != nil && !appState.playbackRecorder.isRecording
+    }
+
+    private var playbackPositionLabel: String {
+        let recorder = appState.playbackRecorder
+        guard recorder.playbackDuration > 0 else { return "--:-- / --:--" }
+        return "\(formatDuration(recorder.playbackTime)) / \(formatDuration(recorder.playbackDuration))"
     }
 
     // MARK: - Inspector
@@ -538,6 +565,18 @@ struct ContentView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
     }
 
+    private func transportIconButton(_ systemImage: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(Theme.surfaceElevated, in: Circle())
+                .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func metricRow(_ label: String, value: String, tint: Color) -> some View {
         HStack {
             Text(label)
@@ -622,10 +661,13 @@ struct ContentView: View {
     }
 
     private func togglePlay() {
-        if appState.playbackRecorder.isPlaying {
-            appState.playbackRecorder.stop()
+        let recorder = appState.playbackRecorder
+        if recorder.isPlaying {
+            recorder.pause()
+        } else if recorder.canResumePlayback {
+            recorder.resume()
         } else if let url = nowPlayingURL {
-            try? appState.playbackRecorder.playFile(url)
+            try? recorder.playFile(url)
         }
     }
 
