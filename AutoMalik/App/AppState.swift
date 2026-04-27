@@ -179,6 +179,7 @@ class AppState: ObservableObject {
 enum LyricsTranscriptionLanguage: String, CaseIterable, Identifiable {
     case english = "en-US"
     case hindi = "hi-IN"
+    case bilingual = "hi-IN+en-US"
 
     var id: String { rawValue }
 
@@ -188,6 +189,19 @@ enum LyricsTranscriptionLanguage: String, CaseIterable, Identifiable {
             return "English"
         case .hindi:
             return "Hindi"
+        case .bilingual:
+            return "Hindi + English"
+        }
+    }
+
+    var recognitionLocales: [Locale] {
+        switch self {
+        case .english:
+            return [Locale(identifier: "en-US")]
+        case .hindi:
+            return [Locale(identifier: "hi-IN")]
+        case .bilingual:
+            return [Locale(identifier: "hi-IN"), Locale(identifier: "en-US")]
         }
     }
 }
@@ -291,6 +305,7 @@ struct RecognizedLyricToken {
     let text: String
     let timestamp: TimeInterval
     let duration: TimeInterval
+    let confidence: Float
 }
 
 enum LyricsTranscriptionError: LocalizedError {
@@ -317,7 +332,8 @@ enum LyricsTranscriptionError: LocalizedError {
 }
 
 final class LyricsTranscriber {
-    private let chunkDuration: TimeInterval = 50
+    private let chunkDuration: TimeInterval = 35
+    private let chunkOverlap: TimeInterval = 5
 
     func transcribe(
         audioURL: URL,
@@ -338,23 +354,42 @@ final class LyricsTranscriber {
             throw LyricsTranscriptionError.speechRestricted
         }
 
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.rawValue)),
-              recognizer.isAvailable else {
-            throw LyricsTranscriptionError.recognizerUnavailable(language.displayName)
-        }
-
         progress(0.04, "Preparing audio")
-        let chunks = try splitAudioIfNeeded(audioURL)
+        let chunks = try splitAudio(audioURL)
         guard !chunks.isEmpty else { throw LyricsTranscriptionError.emptyAudio }
 
         var tokens: [RecognizedLyricToken] = []
-        for (index, chunk) in chunks.enumerated() {
-            progress(Double(index) / Double(chunks.count), "Transcribing \(index + 1) of \(chunks.count)")
-            let chunkTokens = try await recognize(url: chunk.url, offset: chunk.offset, recognizer: recognizer)
-            tokens.append(contentsOf: chunkTokens)
+        var availableRecognizers: [(displayName: String, recognizer: SFSpeechRecognizer)] = []
+        for locale in language.recognitionLocales {
+            if let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable {
+                availableRecognizers.append((locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier, recognizer))
+            }
         }
 
-        let lrc = formatLRC(from: tokens)
+        guard !availableRecognizers.isEmpty else {
+            throw LyricsTranscriptionError.recognizerUnavailable(language.displayName)
+        }
+
+        let totalJobs = chunks.count * availableRecognizers.count
+        var completedJobs = 0
+        for recognizerInfo in availableRecognizers {
+            for (index, chunk) in chunks.enumerated() {
+                let status = availableRecognizers.count > 1
+                    ? "Transcribing \(recognizerInfo.displayName) \(index + 1) of \(chunks.count)"
+                    : "Transcribing \(index + 1) of \(chunks.count)"
+                progress(Double(completedJobs) / Double(max(1, totalJobs)), status)
+                do {
+                    let chunkTokens = try await recognize(url: chunk.url, offset: chunk.offset, recognizer: recognizerInfo.recognizer)
+                    tokens.append(contentsOf: chunkTokens)
+                } catch {
+                    NSLog("[AutoMalik] lyric transcription chunk failed at \(chunk.offset)s: \(error)")
+                }
+                completedJobs += 1
+            }
+        }
+
+        let mergedTokens = mergeOverlappingTokens(tokens)
+        let lrc = formatLRC(from: mergedTokens)
         guard !lrc.isEmpty else { throw LyricsTranscriptionError.noSpeechFound }
         progress(1, "Lyrics created")
         return lrc
@@ -371,7 +406,7 @@ final class LyricsTranscriber {
     private func recognize(url: URL, offset: TimeInterval, recognizer: SFSpeechRecognizer) async throws -> [RecognizedLyricToken] {
         try await withCheckedThrowingContinuation { continuation in
             let request = SFSpeechURLRecognitionRequest(url: url)
-            request.shouldReportPartialResults = false
+            request.shouldReportPartialResults = true
             request.taskHint = .dictation
             if #available(macOS 13.0, *) {
                 request.addsPunctuation = false
@@ -389,12 +424,12 @@ final class LyricsTranscriber {
                     }
                 }
 
-                if let error, !didResume {
+                if error != nil, !didResume {
                     didResume = true
                     if let bestResult {
                         continuation.resume(returning: self.tokens(from: bestResult, offset: offset))
                     } else {
-                        continuation.resume(throwing: error)
+                        continuation.resume(returning: [])
                     }
                 }
             }
@@ -408,20 +443,16 @@ final class LyricsTranscriber {
             return RecognizedLyricToken(
                 text: text,
                 timestamp: offset + segment.timestamp,
-                duration: segment.duration
+                duration: segment.duration,
+                confidence: segment.confidence
             )
         }
     }
 
-    private func splitAudioIfNeeded(_ audioURL: URL) throws -> [(url: URL, offset: TimeInterval)] {
+    private func splitAudio(_ audioURL: URL) throws -> [(url: URL, offset: TimeInterval)] {
         let input = try AVAudioFile(forReading: audioURL)
         let format = input.processingFormat
         guard input.length > 0, format.sampleRate > 0 else { throw LyricsTranscriptionError.emptyAudio }
-
-        let duration = Double(input.length) / format.sampleRate
-        guard duration > chunkDuration else {
-            return [(audioURL, 0)]
-        }
 
         let chunksDirectory = audioURL.deletingLastPathComponent().appendingPathComponent("lyrics_transcription_chunks", isDirectory: true)
         let fm = FileManager.default
@@ -443,6 +474,7 @@ final class LyricsTranscriber {
         var chunks: [(url: URL, offset: TimeInterval)] = []
         var chunkIndex = 0
         var startFrame: AVAudioFramePosition = 0
+        let stepFrames = AVAudioFramePosition((chunkDuration - chunkOverlap) * format.sampleRate)
 
         while startFrame < input.length {
             input.framePosition = startFrame
@@ -461,16 +493,77 @@ final class LyricsTranscriber {
                 guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: framesToRead) else { break }
                 try input.read(into: buffer, frameCount: framesToRead)
                 if buffer.frameLength == 0 { break }
+                normalize(buffer)
                 try output.write(from: buffer)
                 framesRemaining -= AVAudioFramePosition(buffer.frameLength)
             }
 
             chunks.append((chunkURL, Double(startFrame) / format.sampleRate))
-            startFrame = chunkEnd
+            if chunkEnd >= input.length { break }
+            startFrame += max(1, stepFrames)
             chunkIndex += 1
         }
 
         return chunks
+    }
+
+    private func normalize(_ buffer: AVAudioPCMBuffer) {
+        guard let channelData = buffer.floatChannelData else { return }
+        let channels = Int(buffer.format.channelCount)
+        let frames = Int(buffer.frameLength)
+        guard channels > 0, frames > 0 else { return }
+
+        var peak: Float = 0
+        for channel in 0..<channels {
+            let data = channelData[channel]
+            for frame in 0..<frames {
+                peak = max(peak, abs(data[frame]))
+            }
+        }
+
+        guard peak > 0.001, peak < 0.72 else { return }
+        let gain = min(6.0, 0.82 / peak)
+        for channel in 0..<channels {
+            let data = channelData[channel]
+            for frame in 0..<frames {
+                data[frame] = max(-0.98, min(0.98, data[frame] * gain))
+            }
+        }
+    }
+
+    private func mergeOverlappingTokens(_ tokens: [RecognizedLyricToken]) -> [RecognizedLyricToken] {
+        let sortedTokens = tokens
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        var merged: [RecognizedLyricToken] = []
+        for token in sortedTokens {
+            if let lastIndex = merged.indices.last,
+               abs(merged[lastIndex].timestamp - token.timestamp) < 0.55 {
+                let current = merged[lastIndex]
+                if tokenScore(token) > tokenScore(current) {
+                    merged[lastIndex] = token
+                }
+            } else if !merged.contains(where: { existing in
+                abs(existing.timestamp - token.timestamp) < 1.2 &&
+                normalizedText(existing.text) == normalizedText(token.text)
+            }) {
+                merged.append(token)
+            }
+        }
+        return merged.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func tokenScore(_ token: RecognizedLyricToken) -> Float {
+        let textBonus: Float = token.text.count > 1 ? 0.12 : 0
+        let scriptBonus: Float = token.text.unicodeScalars.contains { (0x0900...0x097F).contains(Int($0.value)) } ? 0.08 : 0
+        return token.confidence + textBonus + scriptBonus
+    }
+
+    private func normalizedText(_ text: String) -> String {
+        text
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
     }
 
     private func formatLRC(from tokens: [RecognizedLyricToken]) -> String {
