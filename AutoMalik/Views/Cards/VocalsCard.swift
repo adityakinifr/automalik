@@ -297,6 +297,59 @@ struct VocalsCard: View {
             .padding(12)
             .background(Theme.controlFill, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
+        } else if appState.hasSeparatedAudio || appState.hasCapturedAudio {
+            VStack(spacing: 10) {
+                HStack {
+                    Label("Lyrics", systemImage: "text.quote")
+                        .font(.system(size: 10, weight: .black))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.textTertiary)
+                    Spacer()
+                    lyricsLanguagePicker
+                }
+
+                Button {
+                    generateLyrics()
+                } label: {
+                    HStack(spacing: 8) {
+                        if appState.isTranscribingLyrics {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "waveform.and.magnifyingglass")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        Text(appState.isTranscribingLyrics ? "Creating lyrics..." : "Generate from audio")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Theme.coolGradient, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(appState.isTranscribingLyrics)
+
+                if appState.isTranscribingLyrics {
+                    VStack(spacing: 5) {
+                        ProgressView(value: appState.lyricTranscriptionProgress)
+                            .tint(Theme.mint)
+                        Text(appState.lyricTranscriptionStatus)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                } else {
+                    Text(appState.hasSeparatedAudio ? "Uses the isolated vocal stem for better lyric discovery." : "Isolate vocals first for cleaner lyric discovery.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.textTertiary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(12)
+            .background(Theme.controlFill, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
         }
     }
 
@@ -340,6 +393,14 @@ struct VocalsCard: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
+                lyricsLanguagePicker
+                Button {
+                    generateLyrics(updateDraft: true)
+                } label: {
+                    Label(appState.isTranscribingLyrics ? "Generating" : "Generate", systemImage: "waveform.and.magnifyingglass")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .disabled(appState.isTranscribingLyrics || (!appState.hasCapturedAudio && !appState.hasSeparatedAudio))
                 Button {
                     importLyrics()
                 } label: {
@@ -355,6 +416,16 @@ struct VocalsCard: View {
                 .background(Theme.panel, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
                 .frame(width: 560, height: 320)
+
+            if appState.isTranscribingLyrics {
+                VStack(spacing: 6) {
+                    ProgressView(value: appState.lyricTranscriptionProgress)
+                        .tint(Theme.mint)
+                    Text(appState.lyricTranscriptionStatus)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
 
             Text("Timed format example: [00:12.50] पहली लाइन / first line")
                 .font(.system(size: 11))
@@ -383,6 +454,18 @@ struct VocalsCard: View {
         }
         .padding(22)
         .background(Theme.surface)
+    }
+
+    private var lyricsLanguagePicker: some View {
+        Picker("Lyrics language", selection: $appState.lyricTranscriptionLanguage) {
+            ForEach(LyricsTranscriptionLanguage.allCases) { language in
+                Text(language.displayName).tag(language)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 150)
+        .disabled(appState.isTranscribingLyrics)
     }
 
 private func volumeSlider(_ label: String, value: Binding<Float>, icon: String, color: Color) -> some View {
@@ -542,6 +625,29 @@ private func volumeSlider(_ label: String, value: Binding<Float>, icon: String, 
             draftLyrics = text
         } catch {
             errorMessage = "Could not import lyrics: \(error.localizedDescription)"
+        }
+    }
+
+    private func generateLyrics(updateDraft: Bool = false) {
+        let sourceURL: URL
+        if appState.hasSeparatedAudio {
+            sourceURL = appState.project.vocalsURL
+        } else if appState.hasCapturedAudio {
+            sourceURL = appState.project.capturedAudioURL
+        } else {
+            errorMessage = "Load a source track before generating lyrics."
+            return
+        }
+
+        Task {
+            do {
+                try await appState.generateLyrics(from: sourceURL, language: appState.lyricTranscriptionLanguage)
+                if updateDraft {
+                    draftLyrics = appState.lyricsText
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

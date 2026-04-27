@@ -20,6 +20,8 @@
     <string>AutoMalik needs microphone access to record your voice while singing.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>AutoMalik needs system audio access to capture music playing from other apps.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>AutoMalik uses speech recognition to turn your source audio into timestamped lyrics for sing-along.</string>
     <key>NSScreenRecordingUsageDescription</key>
     <string>AutoMalik needs screen recording permission to capture system audio output.</string>
 </dict>

@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import Speech
 
 @MainActor
 class AppState: ObservableObject {
@@ -27,6 +28,10 @@ class AppState: ObservableObject {
     @Published var isPlayingInstrumental = false
     @Published var lyricsText = ""
     @Published var lyricLines: [LyricLine] = []
+    @Published var lyricTranscriptionLanguage: LyricsTranscriptionLanguage = .english
+    @Published var isTranscribingLyrics = false
+    @Published var lyricTranscriptionProgress: Double = 0
+    @Published var lyricTranscriptionStatus = ""
     @Published var instrumentalPlaybackVolume: Float = 1.0
     @Published var guideVocalVolume: Float = 0.35
     @Published var micMonitorVolume: Float = 0.5
@@ -55,6 +60,7 @@ class AppState: ObservableObject {
     let keyDetector = KeyDetector()
     let urlDownloader = URLDownloader()
     let liveAutoTuner = LiveAutoTuner()
+    let lyricsTranscriber = LyricsTranscriber()
 
     // Live mode
     @Published var isLiveMode = false
@@ -144,8 +150,45 @@ class AppState: ObservableObject {
         setLyrics(text)
     }
 
+    func generateLyrics(from audioURL: URL, language: LyricsTranscriptionLanguage) async throws {
+        guard !isTranscribingLyrics else { return }
+
+        isTranscribingLyrics = true
+        lyricTranscriptionProgress = 0
+        lyricTranscriptionStatus = "Preparing audio"
+        defer {
+            isTranscribingLyrics = false
+            lyricTranscriptionProgress = 0
+            lyricTranscriptionStatus = ""
+        }
+
+        let lyrics = try await lyricsTranscriber.transcribe(audioURL: audioURL, language: language) { [weak self] progress, status in
+            Task { @MainActor in
+                self?.lyricTranscriptionProgress = progress
+                self?.lyricTranscriptionStatus = status
+            }
+        }
+        setLyrics(lyrics)
+    }
+
     func currentLyricIndex() -> Int? {
         LyricsParser.currentIndex(in: lyricLines, at: playbackRecorder.playbackTime)
+    }
+}
+
+enum LyricsTranscriptionLanguage: String, CaseIterable, Identifiable {
+    case english = "en-US"
+    case hindi = "hi-IN"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .english:
+            return "English"
+        case .hindi:
+            return "Hindi"
+        }
     }
 }
 
@@ -241,5 +284,235 @@ enum LyricsParser {
         }
 
         return minutes * 60 + seconds + fraction
+    }
+}
+
+struct RecognizedLyricToken {
+    let text: String
+    let timestamp: TimeInterval
+    let duration: TimeInterval
+}
+
+enum LyricsTranscriptionError: LocalizedError {
+    case speechDenied
+    case speechRestricted
+    case recognizerUnavailable(String)
+    case noSpeechFound
+    case emptyAudio
+
+    var errorDescription: String? {
+        switch self {
+        case .speechDenied:
+            return "Speech recognition access is denied. Enable it in System Settings → Privacy & Security → Speech Recognition."
+        case .speechRestricted:
+            return "Speech recognition is restricted on this Mac."
+        case let .recognizerUnavailable(language):
+            return "Speech recognition is not available for \(language) right now."
+        case .noSpeechFound:
+            return "No recognizable lyrics were found. Try the isolated vocals stem or a cleaner source."
+        case .emptyAudio:
+            return "The selected audio file is empty."
+        }
+    }
+}
+
+final class LyricsTranscriber {
+    private let chunkDuration: TimeInterval = 50
+
+    func transcribe(
+        audioURL: URL,
+        language: LyricsTranscriptionLanguage,
+        progress: @escaping (Double, String) -> Void
+    ) async throws -> String {
+        let status = await requestSpeechAuthorization()
+        switch status {
+        case .authorized:
+            break
+        case .denied:
+            throw LyricsTranscriptionError.speechDenied
+        case .restricted:
+            throw LyricsTranscriptionError.speechRestricted
+        case .notDetermined:
+            throw LyricsTranscriptionError.speechDenied
+        @unknown default:
+            throw LyricsTranscriptionError.speechRestricted
+        }
+
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.rawValue)),
+              recognizer.isAvailable else {
+            throw LyricsTranscriptionError.recognizerUnavailable(language.displayName)
+        }
+
+        progress(0.04, "Preparing audio")
+        let chunks = try splitAudioIfNeeded(audioURL)
+        guard !chunks.isEmpty else { throw LyricsTranscriptionError.emptyAudio }
+
+        var tokens: [RecognizedLyricToken] = []
+        for (index, chunk) in chunks.enumerated() {
+            progress(Double(index) / Double(chunks.count), "Transcribing \(index + 1) of \(chunks.count)")
+            let chunkTokens = try await recognize(url: chunk.url, offset: chunk.offset, recognizer: recognizer)
+            tokens.append(contentsOf: chunkTokens)
+        }
+
+        let lrc = formatLRC(from: tokens)
+        guard !lrc.isEmpty else { throw LyricsTranscriptionError.noSpeechFound }
+        progress(1, "Lyrics created")
+        return lrc
+    }
+
+    private func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    private func recognize(url: URL, offset: TimeInterval, recognizer: SFSpeechRecognizer) async throws -> [RecognizedLyricToken] {
+        try await withCheckedThrowingContinuation { continuation in
+            let request = SFSpeechURLRecognitionRequest(url: url)
+            request.shouldReportPartialResults = false
+            request.taskHint = .dictation
+            if #available(macOS 13.0, *) {
+                request.addsPunctuation = false
+            }
+
+            var didResume = false
+            var bestResult: SFSpeechRecognitionResult?
+
+            _ = recognizer.recognitionTask(with: request) { result, error in
+                if let result {
+                    bestResult = result
+                    if result.isFinal && !didResume {
+                        didResume = true
+                        continuation.resume(returning: self.tokens(from: result, offset: offset))
+                    }
+                }
+
+                if let error, !didResume {
+                    didResume = true
+                    if let bestResult {
+                        continuation.resume(returning: self.tokens(from: bestResult, offset: offset))
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+        }
+    }
+
+    private func tokens(from result: SFSpeechRecognitionResult, offset: TimeInterval) -> [RecognizedLyricToken] {
+        result.bestTranscription.segments.compactMap { segment in
+            let text = segment.substring.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return RecognizedLyricToken(
+                text: text,
+                timestamp: offset + segment.timestamp,
+                duration: segment.duration
+            )
+        }
+    }
+
+    private func splitAudioIfNeeded(_ audioURL: URL) throws -> [(url: URL, offset: TimeInterval)] {
+        let input = try AVAudioFile(forReading: audioURL)
+        let format = input.processingFormat
+        guard input.length > 0, format.sampleRate > 0 else { throw LyricsTranscriptionError.emptyAudio }
+
+        let duration = Double(input.length) / format.sampleRate
+        guard duration > chunkDuration else {
+            return [(audioURL, 0)]
+        }
+
+        let chunksDirectory = audioURL.deletingLastPathComponent().appendingPathComponent("lyrics_transcription_chunks", isDirectory: true)
+        let fm = FileManager.default
+        if fm.fileExists(atPath: chunksDirectory.path) {
+            try fm.removeItem(at: chunksDirectory)
+        }
+        try fm.createDirectory(at: chunksDirectory, withIntermediateDirectories: true)
+
+        let framesPerChunk = AVAudioFramePosition(chunkDuration * format.sampleRate)
+        let outputSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+
+        var chunks: [(url: URL, offset: TimeInterval)] = []
+        var chunkIndex = 0
+        var startFrame: AVAudioFramePosition = 0
+
+        while startFrame < input.length {
+            input.framePosition = startFrame
+            let chunkURL = chunksDirectory.appendingPathComponent(String(format: "lyrics_chunk_%03d.wav", chunkIndex))
+            let output = try AVAudioFile(
+                forWriting: chunkURL,
+                settings: outputSettings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false
+            )
+
+            let chunkEnd = min(startFrame + framesPerChunk, input.length)
+            var framesRemaining = chunkEnd - startFrame
+            while framesRemaining > 0 {
+                let framesToRead = min(AVAudioFrameCount(8192), AVAudioFrameCount(framesRemaining))
+                guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: framesToRead) else { break }
+                try input.read(into: buffer, frameCount: framesToRead)
+                if buffer.frameLength == 0 { break }
+                try output.write(from: buffer)
+                framesRemaining -= AVAudioFramePosition(buffer.frameLength)
+            }
+
+            chunks.append((chunkURL, Double(startFrame) / format.sampleRate))
+            startFrame = chunkEnd
+            chunkIndex += 1
+        }
+
+        return chunks
+    }
+
+    private func formatLRC(from tokens: [RecognizedLyricToken]) -> String {
+        let sortedTokens = tokens.sorted { $0.timestamp < $1.timestamp }
+        var lines: [(time: TimeInterval, text: String)] = []
+        var currentTokens: [RecognizedLyricToken] = []
+
+        for token in sortedTokens {
+            if let last = currentTokens.last {
+                let pause = token.timestamp - (last.timestamp + last.duration)
+                let currentText = currentTokens.map(\.text).joined(separator: " ")
+                if pause > 0.85 || currentText.count >= 44 || token.timestamp - currentTokens[0].timestamp > 4.5 {
+                    appendLine(from: currentTokens, to: &lines)
+                    currentTokens = []
+                }
+            }
+            currentTokens.append(token)
+        }
+        appendLine(from: currentTokens, to: &lines)
+
+        return lines
+            .filter { !$0.text.isEmpty }
+            .map { "\(lrcTimestamp($0.time)) \($0.text)" }
+            .joined(separator: "\n")
+    }
+
+    private func appendLine(from tokens: [RecognizedLyricToken], to lines: inout [(time: TimeInterval, text: String)]) {
+        guard let first = tokens.first else { return }
+        let text = tokens
+            .map(\.text)
+            .joined(separator: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        lines.append((first.timestamp, text))
+    }
+
+    private func lrcTimestamp(_ time: TimeInterval) -> String {
+        let safeTime = max(0, time)
+        let minutes = Int(safeTime) / 60
+        let seconds = Int(safeTime) % 60
+        let centiseconds = Int((safeTime - floor(safeTime)) * 100)
+        return String(format: "[%02d:%02d.%02d]", minutes, seconds, centiseconds)
     }
 }
